@@ -356,6 +356,82 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    val audioPlayerEngine = com.example.domain.NativeAudioPlayerEngine(application)
+
+    val allAudioItems: StateFlow<List<com.example.data.model.AudioItemEntity>> = repository.allAudioItems
+        .flatMapLatest { items ->
+            if (items.isEmpty()) {
+                // Populate default open public domain audio catalog
+                viewModelScope.launch {
+                    com.example.domain.OnlineAudioCatalogProvider.featuredPublicDomainCatalog.forEach {
+                        repository.insertAudioItem(it)
+                    }
+                }
+            }
+            MutableStateFlow(items)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val voiceCoachingPreferences: StateFlow<com.example.data.model.VoiceCoachingPreferences> = repository.voiceCoachingPreferences
+        .flatMapLatest { prefs ->
+            MutableStateFlow(prefs ?: com.example.data.model.VoiceCoachingPreferences())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.example.data.model.VoiceCoachingPreferences())
+
+    fun importAudioFile(context: android.content.Context, uri: android.net.Uri, category: String = "Audiobooks") {
+        viewModelScope.launch {
+            try {
+                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            var title = "Imported Audio Track"
+            var artist = "Unknown Artist"
+            var durationMs = 0L
+
+            try {
+                val mmr = android.media.MediaMetadataRetriever()
+                mmr.setDataSource(context, uri)
+                val metaTitle = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val metaArtist = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                val metaDuration = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+
+                if (!metaTitle.isNullOrBlank()) title = metaTitle
+                if (!metaArtist.isNullOrBlank()) artist = metaArtist
+                if (metaDuration != null) durationMs = metaDuration.toLongOrNull() ?: 0L
+                mmr.release()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            val item = com.example.data.model.AudioItemEntity(
+                uriString = uri.toString(),
+                title = title,
+                artistOrAuthor = artist,
+                category = category,
+                durationMs = durationMs,
+                lastPlayedTimestamp = System.currentTimeMillis()
+            )
+            repository.insertAudioItem(item)
+        }
+    }
+
+    private fun String.isNull_or_blank(): Boolean = this.isBlank()
+
+    fun playAudioTrack(item: com.example.data.model.AudioItemEntity) {
+        audioPlayerEngine.playTrack(item)
+        viewModelScope.launch {
+            repository.updateAudioItem(item.copy(lastPlayedTimestamp = System.currentTimeMillis()))
+        }
+    }
+
+    fun saveVoiceCoachingPreferences(prefs: com.example.data.model.VoiceCoachingPreferences) {
+        viewModelScope.launch {
+            repository.saveVoiceCoachingPreferences(prefs)
+        }
+    }
+
+
 
 
     fun setDate(dateString: String) {

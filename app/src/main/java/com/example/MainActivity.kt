@@ -55,7 +55,7 @@ import com.example.ui.theme.NutriGlassTheme
 import com.example.ui.viewmodel.HealthViewModel
 
 import com.example.ui.screens.MonthlyReportScreen
-import com.example.ui.screens.WalkAndLearnScreen
+import com.example.ui.screens.WalkAndListenScreen
 import com.example.ui.screens.PdfReaderScreen
 import androidx.compose.material.icons.filled.AutoStories
 
@@ -209,13 +209,9 @@ fun NutriGlassApp(
                     viewModel = viewModel,
                     onNavigateBack = { currentScreen = Screen.Profile }
                 )
-                Screen.WalkAndLearn -> WalkAndLearnScreen(
+                Screen.WalkAndLearn -> WalkAndListenScreen(
                     viewModel = viewModel,
-                    onNavigateBack = { currentScreen = Screen.Home },
-                    onOpenPdfReader = { bookId ->
-                        viewModel.selectBook(bookId)
-                        currentScreen = Screen.PdfReader
-                    }
+                    onNavigateBack = { currentScreen = Screen.Home }
                 )
                 Screen.PdfReader -> {
                     val bookId = viewModel.selectedBookId.collectAsState().value ?: 0L

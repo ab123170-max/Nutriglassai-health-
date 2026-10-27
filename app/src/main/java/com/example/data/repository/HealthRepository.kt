@@ -301,5 +301,29 @@ class HealthRepository(private val database: AppDatabase) {
         achievementDao.unlock("walk_and_learn_first")
         return id
     }
+
+    // Walk & Listen Audio Items
+    val allAudioItems: Flow<List<com.example.data.model.AudioItemEntity>> = healthDao.getAllAudioItems()
+
+    fun getAudioItemsByCategory(category: String): Flow<List<com.example.data.model.AudioItemEntity>> =
+        healthDao.getAudioItemsByCategory(category)
+
+    val favoriteAudioItems: Flow<List<com.example.data.model.AudioItemEntity>> = healthDao.getFavoriteAudioItems()
+
+    suspend fun getAudioItemByIdDirect(id: Long): com.example.data.model.AudioItemEntity? = healthDao.getAudioItemByIdDirect(id)
+
+    suspend fun insertAudioItem(item: com.example.data.model.AudioItemEntity): Long = healthDao.insertAudioItem(item)
+
+    suspend fun updateAudioItem(item: com.example.data.model.AudioItemEntity) = healthDao.updateAudioItem(item)
+
+    suspend fun deleteAudioItem(id: Long) = healthDao.deleteAudioItem(id)
+
+    // Voice Coaching Preferences
+    val voiceCoachingPreferences: Flow<com.example.data.model.VoiceCoachingPreferences?> = healthDao.getVoiceCoachingPreferences()
+
+    suspend fun saveVoiceCoachingPreferences(prefs: com.example.data.model.VoiceCoachingPreferences) {
+        healthDao.saveVoiceCoachingPreferences(prefs)
+    }
 }
+
 

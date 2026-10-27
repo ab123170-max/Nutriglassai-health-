@@ -325,4 +325,33 @@ data class ReadingSessionRecord(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "audio_items")
+data class AudioItemEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val uriString: String,
+    val title: String,
+    val artistOrAuthor: String = "Unknown Artist",
+    val category: String = "Audiobooks", // "Audiobooks", "Music", "Speeches & Podcasts", "Guided Walking"
+    val durationMs: Long = 0L,
+    val lastPlaybackPositionMs: Long = 0L,
+    val isFavorite: Boolean = false,
+    val isOnline: Boolean = false,
+    val sourceLicenseInfo: String = "Local File / Open License",
+    val coverArtUri: String? = null,
+    val lastPlayedTimestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "voice_coaching_preferences")
+data class VoiceCoachingPreferences(
+    @PrimaryKey val id: Int = 1,
+    val isCoachingEnabled: Boolean = true,
+    val announcementFrequencyKm: Float = 1.0f,
+    val announcementFrequencyMinutes: Int = 5,
+    val announceDistance: Boolean = true,
+    val announceTime: Boolean = true,
+    val announceTargetProgress: Boolean = true,
+    val languageCode: String = "en"
+)
+
+
 

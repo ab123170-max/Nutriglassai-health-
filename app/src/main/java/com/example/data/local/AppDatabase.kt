@@ -37,9 +37,11 @@ import kotlinx.coroutines.launch
         FoodScanRecord::class,
         com.example.data.model.BookEntity::class,
         com.example.data.model.BookmarkEntity::class,
-        com.example.data.model.ReadingSessionRecord::class
+        com.example.data.model.ReadingSessionRecord::class,
+        com.example.data.model.AudioItemEntity::class,
+        com.example.data.model.VoiceCoachingPreferences::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

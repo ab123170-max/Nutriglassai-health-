@@ -206,6 +206,38 @@ interface HealthDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReadingSession(session: com.example.data.model.ReadingSessionRecord): Long
+
+    // Walk & Listen Audio Items
+    @Query("SELECT * FROM audio_items ORDER BY lastPlayedTimestamp DESC")
+    fun getAllAudioItems(): Flow<List<com.example.data.model.AudioItemEntity>>
+
+    @Query("SELECT * FROM audio_items WHERE category = :category ORDER BY lastPlayedTimestamp DESC")
+    fun getAudioItemsByCategory(category: String): Flow<List<com.example.data.model.AudioItemEntity>>
+
+    @Query("SELECT * FROM audio_items WHERE isFavorite = 1 ORDER BY lastPlayedTimestamp DESC")
+    fun getFavoriteAudioItems(): Flow<List<com.example.data.model.AudioItemEntity>>
+
+    @Query("SELECT * FROM audio_items WHERE id = :id LIMIT 1")
+    fun getAudioItemById(id: Long): Flow<com.example.data.model.AudioItemEntity?>
+
+    @Query("SELECT * FROM audio_items WHERE id = :id LIMIT 1")
+    suspend fun getAudioItemByIdDirect(id: Long): com.example.data.model.AudioItemEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAudioItem(item: com.example.data.model.AudioItemEntity): Long
+
+    @Update
+    suspend fun updateAudioItem(item: com.example.data.model.AudioItemEntity)
+
+    @Query("DELETE FROM audio_items WHERE id = :id")
+    suspend fun deleteAudioItem(id: Long)
+
+    // Voice Coaching Preferences
+    @Query("SELECT * FROM voice_coaching_preferences WHERE id = 1 LIMIT 1")
+    fun getVoiceCoachingPreferences(): Flow<com.example.data.model.VoiceCoachingPreferences?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveVoiceCoachingPreferences(prefs: com.example.data.model.VoiceCoachingPreferences)
 }
 
 @Dao
