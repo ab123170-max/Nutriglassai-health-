@@ -1,0 +1,6 @@
+{
+  "name": "NutriGlass AI",
+  "description": "AI-powered nutrition, calorie tracker, food scanner, and holistic health dashboard inspired by Samsung Health.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
