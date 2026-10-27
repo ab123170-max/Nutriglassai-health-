@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">NutriGlass AI</string>
+    <string name="nav_home">ホーム</string>
+    <string name="nav_food">食事</string>
+    <string name="nav_scan">AIレンズ</string>
+    <string name="nav_activity">アクティビティ</string>
+    <string name="nav_progress">進捗</string>
+    <string name="nav_profile">プロフィール</string>
+    <string name="title_language_selection">言語を選択</string>
+    <string name="subtitle_language_selection">栄養トラッキングとAIスキャンに使用する言語を選択してください。</string>
+    <string name="search_languages">言語を検索...</string>
+    <string name="btn_continue">続行</string>
+    <string name="settings_language">言語</string>
+    <string name="scanner_title">AIフードレンズ</string>
+    <string name="scanner_history">スキャン履歴</string>
+    <string name="scanner_point_hint">単一の食品または複数のアイテムを含む食事に合わせます</string>
+    <string name="scanner_analyzing">NutriGlass Vision AI 実行中...</string>
+    <string name="scanner_cancel">スキャンをキャンセル</string>
+    <string name="scanner_retry">再試行</string>
+    <string name="scanner_offline_profile">オフライン食品プロフィールを使用</string>
+    <string name="btn_confirm_save">確認して食事を保存</string>
+    <string name="label_calories">カロリー</string>
+    <string name="label_protein">タンパク質</string>
+    <string name="label_carbs">炭水化物</string>
+    <string name="label_fat">脂質</string>
+    <string name="label_fiber">食物繊維</string>
+    <string name="label_sodium">ナトリウム</string>
+    <string name="water_title">水分トラッカー</string>
+    <string name="weight_title">体重と測定</string>
+    <string name="sleep_title">睡眠トラッカー</string>
+    <string name="steps_title">歩数とウォーキング</string>
+</resources>

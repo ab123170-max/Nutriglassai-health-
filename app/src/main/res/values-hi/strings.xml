@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">न्यूट्रीग्लास एआई</string>
+    <string name="nav_home">होम</string>
+    <string name="nav_food">भोजन</string>
+    <string name="nav_scan">एआई लेंस</string>
+    <string name="nav_activity">गतिविधि</string>
+    <string name="nav_progress">प्रगति</string>
+    <string name="nav_profile">प्रोफाइल</string>
+    <string name="title_language_selection">अपनी भाषा चुनें</string>
+    <string name="subtitle_language_selection">पोषण ट्रैकिंग और एआई स्कैनिंग के लिए अपनी पसंदीदा भाषा चुनें।</string>
+    <string name="search_languages">भाषाएँ खोजें...</string>
+    <string name="btn_continue">जारी रखें</string>
+    <string name="settings_language">भाषा</string>
+    <string name="scanner_title">एआई फूड लेंस</string>
+    <string name="scanner_history">स्कैन इतिहास</string>
+    <string name="scanner_point_hint">एकल भोजन या कई व्यंजनों वाले पूर्ण भोजन पर इंगित करें</string>
+    <string name="scanner_analyzing">न्यूट्रीग्लास विजन एआई चल रहा है...</string>
+    <string name="scanner_cancel">स्कैन रद्द करें</string>
+    <string name="scanner_retry">पुनः प्रयास करें</string>
+    <string name="scanner_offline_profile">ऑफ़लाइन खाद्य प्रोफ़ाइल का उपयोग करें</string>
+    <string name="btn_confirm_save">पुष्टि करें और भोजन सहेजें</string>
+    <string name="label_calories">कैलोरी</string>
+    <string name="label_protein">प्रोटीन</string>
+    <string name="label_carbs">कार्बोहाइड्रेट</string>
+    <string name="label_fat">वसा</string>
+    <string name="label_fiber">फाइबर</string>
+    <string name="label_sodium">सोडियम</string>
+    <string name="water_title">पानी ट्रैकर</string>
+    <string name="weight_title">वजन और माप</string>
+    <string name="sleep_title">नींद ट्रैकर</string>
+    <string name="steps_title">कदम और चलना</string>
+</resources>

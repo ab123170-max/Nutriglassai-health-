@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">نوتري غلاس الذكي</string>
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_food">الطعام</string>
+    <string name="nav_scan">عدسة الذكاء</string>
+    <string name="nav_activity">النشاط</string>
+    <string name="nav_progress">التقدم</string>
+    <string name="nav_profile">الملف الشخصي</string>
+    <string name="title_language_selection">اختر لغتك</string>
+    <string name="subtitle_language_selection">حدد لغتك المفضلة لتتبع التغذية والمسح الضوئي بالذكاء الاصطناعي.</string>
+    <string name="search_languages">البحث عن اللغات...</string>
+    <string name="btn_continue">متابعة</string>
+    <string name="settings_language">اللغة</string>
+    <string name="scanner_title">عدسة الطعام بالذكاء الاصطناعي</string>
+    <string name="scanner_history">سجل المسح</string>
+    <string name="scanner_point_hint">وجه الكاميرا نحو طعام واحد أو وجبة كاملة تحتوي على عناصر متعددة</string>
+    <string name="scanner_analyzing">جاري تشغيل رؤية نوتري غلاس...</string>
+    <string name="scanner_cancel">إلغاء المسح</string>
+    <string name="scanner_retry">إعادة المحاولة</string>
+    <string name="scanner_offline_profile">استخدام الملف الشخصي للأطعمة بدون إنترنت</string>
+    <string name="btn_confirm_save">تأكيد وحفظ الوجبة</string>
+    <string name="label_calories">السعرات الحرارية</string>
+    <string name="label_protein">البروتين</string>
+    <string name="label_carbs">الكربوهيدرات</string>
+    <string name="label_fat">الدهون</string>
+    <string name="label_fiber">الألياف</string>
+    <string name="label_sodium">الصوديوم</string>
+    <string name="water_title">متتبع المياه</string>
+    <string name="weight_title">الوزن والقياسات</string>
+    <string name="sleep_title">متتبع النوم</string>
+    <string name="steps_title">الخطوات والمشي</string>
+</resources>

@@ -166,4 +166,140 @@ class HealthRepository(private val database: AppDatabase) {
     suspend fun unlockAchievement(code: String) {
         achievementDao.unlock(code)
     }
+
+    // Monthly Goal Targets
+    fun getMonthlyGoalTarget(monthKey: String): Flow<com.example.data.model.MonthlyGoalTarget?> =
+        healthDao.getMonthlyGoalTarget(monthKey)
+
+    val allMonthlyGoalTargets: Flow<List<com.example.data.model.MonthlyGoalTarget>> =
+        healthDao.getAllMonthlyGoalTargets()
+
+    suspend fun saveMonthlyGoalTarget(target: com.example.data.model.MonthlyGoalTarget) {
+        healthDao.saveMonthlyGoalTarget(target)
+    }
+
+    // Database Restore from JSON Backup
+    suspend fun restoreFromBackupJson(jsonString: String): Boolean {
+        return try {
+            val root = org.json.JSONObject(jsonString)
+            if (root.has("profile")) {
+                val p = root.getJSONObject("profile")
+                val profile = UserProfile(
+                    name = p.optString("name", "Health Enthusiast"),
+                    age = p.optInt("age", 26),
+                    gender = p.optString("gender", "Male"),
+                    heightCm = p.optDouble("heightCm", 175.0).toFloat(),
+                    weightKg = p.optDouble("weightKg", 70.0).toFloat(),
+                    targetWeightKg = p.optDouble("targetWeightKg", 66.0).toFloat(),
+                    dailyCalorieTarget = p.optInt("dailyCalorieTarget", 2000),
+                    dailyStepGoal = p.optInt("dailyStepGoal", 8000),
+                    onboardingCompleted = true
+                )
+                healthDao.saveUserProfile(profile)
+            }
+
+            if (root.has("meals")) {
+                val arr = root.getJSONArray("meals")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val meal = MealEntry(
+                        dateString = o.optString("dateString"),
+                        mealType = o.optString("mealType", "Lunch"),
+                        foodName = o.optString("foodName"),
+                        nepaliName = o.optString("nepaliName", ""),
+                        portionDescription = o.optString("portionDescription", "1 serving"),
+                        quantity = o.optDouble("quantity", 1.0).toFloat(),
+                        unit = o.optString("unit", "serving"),
+                        calories = o.optInt("calories", 0),
+                        protein = o.optDouble("protein", 0.0).toFloat(),
+                        carbs = o.optDouble("carbs", 0.0).toFloat(),
+                        fat = o.optDouble("fat", 0.0).toFloat(),
+                        fiber = o.optDouble("fiber", 0.0).toFloat(),
+                        timestamp = o.optLong("timestamp", System.currentTimeMillis())
+                    )
+                    mealDao.insertMeal(meal)
+                }
+            }
+
+            if (root.has("weights")) {
+                val arr = root.getJSONArray("weights")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val w = WeightRecord(
+                        dateString = o.optString("dateString"),
+                        weightKg = o.optDouble("weightKg", 70.0).toFloat(),
+                        timestamp = o.optLong("timestamp", System.currentTimeMillis())
+                    )
+                    healthDao.insertWeight(w)
+                }
+            }
+
+            if (root.has("workouts")) {
+                val arr = root.getJSONArray("workouts")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val w = WorkoutSession(
+                        dateString = o.optString("dateString"),
+                        workoutType = o.optString("workoutType", "Outdoor Walk"),
+                        durationSeconds = o.optLong("durationSeconds", 1800L),
+                        distanceMeters = o.optDouble("distanceMeters", 0.0).toFloat(),
+                        caloriesBurned = o.optInt("caloriesBurned", 150),
+                        completedAt = o.optLong("completedAt", System.currentTimeMillis())
+                    )
+                    healthDao.insertWorkout(w)
+                }
+            }
+
+            if (root.has("monthlyTargets")) {
+                val arr = root.getJSONArray("monthlyTargets")
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val t = com.example.data.model.MonthlyGoalTarget(
+                        monthKey = o.optString("monthKey"),
+                        targetWeightChangeKg = o.optDouble("targetWeightChangeKg", -1.5).toFloat(),
+                        targetWalkingDays = o.optInt("targetWalkingDays", 20),
+                        targetMonthlyWalkingDistanceKm = o.optDouble("targetMonthlyWalkingDistanceKm", 60.0).toFloat(),
+                        targetWorkoutSessions = o.optInt("targetWorkoutSessions", 15),
+                        dailyCalorieTarget = o.optInt("dailyCalorieTarget", 2000),
+                        targetDaysMeetingNutritionGoal = o.optInt("targetDaysMeetingNutritionGoal", 20)
+                    )
+                    healthDao.saveMonthlyGoalTarget(t)
+                }
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    // Books & PDF Reader
+    val allBooks: Flow<List<com.example.data.model.BookEntity>> = healthDao.getAllBooks()
+
+    fun getBookById(id: Long): Flow<com.example.data.model.BookEntity?> = healthDao.getBookById(id)
+
+    suspend fun getBookByIdDirect(id: Long): com.example.data.model.BookEntity? = healthDao.getBookByIdDirect(id)
+
+    suspend fun insertBook(book: com.example.data.model.BookEntity): Long = healthDao.insertBook(book)
+
+    suspend fun updateBook(book: com.example.data.model.BookEntity) = healthDao.updateBook(book)
+
+    suspend fun deleteBook(id: Long) = healthDao.deleteBook(id)
+
+    fun getBookmarksForBook(bookId: Long): Flow<List<com.example.data.model.BookmarkEntity>> = healthDao.getBookmarksForBook(bookId)
+
+    val allBookmarks: Flow<List<com.example.data.model.BookmarkEntity>> = healthDao.getAllBookmarks()
+
+    suspend fun insertBookmark(bookmark: com.example.data.model.BookmarkEntity): Long = healthDao.insertBookmark(bookmark)
+
+    suspend fun deleteBookmark(id: Long) = healthDao.deleteBookmark(id)
+
+    val allReadingSessions: Flow<List<com.example.data.model.ReadingSessionRecord>> = healthDao.getAllReadingSessions()
+
+    suspend fun logReadingSession(session: com.example.data.model.ReadingSessionRecord): Long {
+        val id = healthDao.insertReadingSession(session)
+        achievementDao.unlock("walk_and_learn_first")
+        return id
+    }
 }
+

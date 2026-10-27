@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">نूटری گلاس اے آئی</string>
+    <string name="nav_home">ہوم</string>
+    <string name="nav_food">خوراک</string>
+    <string name="nav_scan">اے آئی لینس</string>
+    <string name="nav_activity">سرگرمی</string>
+    <string name="nav_progress">پیشرفت</string>
+    <string name="nav_profile">پروفائل</string>
+    <string name="title_language_selection">اپنی زبان منتخب کریں</string>
+    <string name="subtitle_language_selection">غذایت کی ٹریکنگ اور اے آئی اسکیننگ کے لیے اپنی ترجیحی زبان منتخب کریں۔</string>
+    <string name="search_languages">زبانیں تلاش کریں...</string>
+    <string name="btn_continue">جاری رکھیں</string>
+    <string name="settings_language">زبان</string>
+    <string name="scanner_title">اے آئی فوڈ لینس</string>
+    <string name="scanner_history">اسکین ہسٹری</string>
+    <string name="scanner_point_hint">کسی اکیلے کھانے یا متعدد اشیاء پر مشتمل کھانے پر اشارہ کریں</string>
+    <string name="scanner_analyzing">نूटری گلاس وژن اے آئی چل رہا ہے...</string>
+    <string name="scanner_cancel">اسکین منسوخ کریں</string>
+    <string name="scanner_retry">دوبارہ کوشش کریں</string>
+    <string name="scanner_offline_profile">آف لائن فوڈ پروفائل استعمال کریں</string>
+    <string name="btn_confirm_save">تصدیق کریں اور کھانا محفوظ کریں</string>
+    <string name="label_calories">کیلوریز</string>
+    <string name="label_protein">پروٹین</string>
+    <string name="label_carbs">کاربوہائیڈ্রেট</string>
+    <string name="label_fat">چর্বی</string>
+    <string name="label_fiber">فائبر</string>
+    <string name="label_sodium">سوڈیم</string>
+    <string name="water_title">پانی کا ٹریکر</string>
+    <string name="weight_title">وزن اور پیمائش</string>
+    <string name="sleep_title">نیند کا ٹریکر</string>
+    <string name="steps_title">قدم اور چہل قدمی</string>
+</resources>

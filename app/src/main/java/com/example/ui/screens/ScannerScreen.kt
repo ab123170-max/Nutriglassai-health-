@@ -117,6 +117,7 @@ fun ScannerScreen(
     val isAnalyzing by viewModel.isScanAnalyzing.collectAsState()
     val scanProgressStage by viewModel.scanProgressStage.collectAsState()
     val scanError by viewModel.scanError.collectAsState()
+    val visionMode by viewModel.visionMode.collectAsState()
 
     var activeTab by remember { mutableIntStateOf(0) } // 0: Live Lens, 1: Scan History
 
@@ -327,12 +328,12 @@ fun ScannerScreen(
                         )
                     }
 
-                    // Top instructions banner
-                    Box(
+                    // Top instructions & Vision Mode Selector
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 16.dp),
-                        contentAlignment = Alignment.Center
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Surface(
                             shape = RoundedCornerShape(20.dp),
@@ -344,6 +345,38 @@ fun ScannerScreen(
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Vision Mode Chips
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            com.example.vision.core.VisionProcessingMode.values().forEach { mode ->
+                                val isSelected = visionMode == mode
+                                val label = when (mode) {
+                                    com.example.vision.core.VisionProcessingMode.AUTO_HYBRID -> "Auto / Hybrid"
+                                    com.example.vision.core.VisionProcessingMode.ON_DEVICE_ONLY -> "On-Device Offline"
+                                    com.example.vision.core.VisionProcessingMode.CLOUD_ASSISTED -> "Cloud Gemini"
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isSelected) HealthTeal else Color.Black.copy(alpha = 0.65f),
+                                    modifier = Modifier
+                                        .clickable { viewModel.setVisionMode(mode) }
+                                        .testTag("mode_chip_${mode.name.lowercase()}")
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) Color.White else Color.LightGray,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 

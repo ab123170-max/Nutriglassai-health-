@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">নিউট্রাগ্লাস এআই</string>
+    <string name="nav_home">হোম</string>
+    <string name="nav_food">খাবার</string>
+    <string name="nav_scan">এআই লেন্স</string>
+    <string name="nav_activity">কার্যকলাপ</string>
+    <string name="nav_progress">অগ্রগতি</string>
+    <string name="nav_profile">প্রোফাইল</string>
+    <string name="title_language_selection">আপনার ভাষা নির্বাচন করুন</string>
+    <string name="subtitle_language_selection">পুষ্টি ট্র্যাক এবং এআই স্ক্যানিংয়ের জন্য আপনার পছন্দের ভাষা নির্বাচন করুন।</string>
+    <string name="search_languages">ভাষা খুঁজুন...</string>
+    <string name="btn_continue">চালিয়ে যান</string>
+    <string name="settings_language">ভাষা</string>
+    <string name="scanner_title">এআই ফুড লেন্স</string>
+    <string name="scanner_history">স্ক্যান ইতিহাস</string>
+    <string name="scanner_point_hint">একটি খাবার বা একাধিক আইটেম সহ সম্পূর্ণ খাবারে নির্দেশ করুন</string>
+    <string name="scanner_analyzing">নিউট্রাগ্লাস ভিশন এআই চলছে...</string>
+    <string name="scanner_cancel">স্ক্যান বাতিল করুন</string>
+    <string name="scanner_retry">পুনরায় চেষ্টা করুন</string>
+    <string name="scanner_offline_profile">অফলাইন খাবার প্রোফাইল ব্যবহার করুন</string>
+    <string name="btn_confirm_save">নিশ্চিত করুন এবং খাবার সংরক্ষণ করুন</string>
+    <string name="label_calories">ক্যালরি</string>
+    <string name="label_protein">প্রোটিন</string>
+    <string name="label_carbs">কার্বস</string>
+    <string name="label_fat">চর্বি</string>
+    <string name="label_fiber">ফাইবার</string>
+    <string name="label_sodium">সোডিয়াম</string>
+    <string name="water_title">পানি ট্র্যাককারী</string>
+    <string name="weight_title">ওজন এবং মাপ</string>
+    <string name="sleep_title">ঘুমের ট্র্যাককারী</string>
+    <string name="steps_title">পদক্ষেপ এবং হাঁটা</string>
+</resources>

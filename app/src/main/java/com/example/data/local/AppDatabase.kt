@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
     entities = [
         UserProfile::class,
         com.example.data.model.UserMeasurementPreferences::class,
+        com.example.data.model.MonthlyGoalTarget::class,
         MealEntry::class,
         FoodItem::class,
         WaterEntry::class,
@@ -33,9 +34,12 @@ import kotlinx.coroutines.launch
         SleepRecord::class,
         Achievement::class,
         ProgressPhoto::class,
-        FoodScanRecord::class
+        FoodScanRecord::class,
+        com.example.data.model.BookEntity::class,
+        com.example.data.model.BookmarkEntity::class,
+        com.example.data.model.ReadingSessionRecord::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

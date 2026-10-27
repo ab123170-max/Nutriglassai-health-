@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">NutriGlass AI</string>
+    <string name="nav_home">首页</string>
+    <string name="nav_food">食物</string>
+    <string name="nav_scan">AI镜头</string>
+    <string name="nav_activity">活动</string>
+    <string name="nav_progress">进度</string>
+    <string name="nav_profile">个人资料</string>
+    <string name="title_language_selection">选择您的语言</string>
+    <string name="subtitle_language_selection">选择您偏好的营养追踪和AI扫描语言。</string>
+    <string name="search_languages">搜索语言...</string>
+    <string name="btn_continue">继续</string>
+    <string name="settings_language">语言</string>
+    <string name="scanner_title">AI食物镜头</string>
+    <string name="scanner_history">扫描历史</string>
+    <string name="scanner_prompt_hint">对准单品食物或多品拼盘</string>
+    <string name="scanner_analyzing">NutriGlass Vision AI 运行中...</string>
+    <string name="scanner_cancel">取消扫描</string>
+    <string name="scanner_retry">重试</string>
+    <string name="scanner_offline_profile">使用离线食物档案</string>
+    <string name="btn_confirm_save">确认并保存餐食</string>
+    <string name="label_calories">卡路里</string>
+    <string name="label_protein">蛋白质</string>
+    <string name="label_carbs">碳水化合物</string>
+    <string name="label_fat">脂肪</string>
+    <string name="label_fiber">纤维</string>
+    <string name="label_sodium">钠</string>
+    <string name="water_title">饮水追踪器</string>
+    <string name="weight_title">体重与身体测量</string>
+    <string name="sleep_title">睡眠追踪器</string>
+    <string name="steps_title">步数与步行</string>
+</resources>

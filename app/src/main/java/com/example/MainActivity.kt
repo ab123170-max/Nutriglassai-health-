@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -53,6 +54,11 @@ import com.example.ui.theme.HealthTeal
 import com.example.ui.theme.NutriGlassTheme
 import com.example.ui.viewmodel.HealthViewModel
 
+import com.example.ui.screens.MonthlyReportScreen
+import com.example.ui.screens.WalkAndLearnScreen
+import com.example.ui.screens.PdfReaderScreen
+import androidx.compose.material.icons.filled.AutoStories
+
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
     object Food : Screen("food", "Food", Icons.Default.Restaurant)
@@ -62,6 +68,9 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
     object AiCoach : Screen("ai_coach", "AI Coach", Icons.Default.Home)
     object MeasurementUnits : Screen("measurement_units", "Units", Icons.Default.Tune)
+    object MonthlyReport : Screen("monthly_report", "Monthly Report", Icons.Default.Assessment)
+    object WalkAndLearn : Screen("walk_and_learn", "Walk & Learn", Icons.Default.AutoStories)
+    object PdfReader : Screen("pdf_reader", "PDF Reader", Icons.Default.AutoStories)
 }
 
 class MainActivity : ComponentActivity() {
@@ -184,7 +193,9 @@ fun NutriGlassApp(
                 )
                 Screen.Profile -> ProfileScreen(
                     viewModel = viewModel,
-                    onNavigateToMeasurementUnits = { currentScreen = Screen.MeasurementUnits }
+                    onNavigateToMeasurementUnits = { currentScreen = Screen.MeasurementUnits },
+                    onNavigateToMonthlyReport = { currentScreen = Screen.MonthlyReport },
+                    onNavigateToWalkAndLearn = { currentScreen = Screen.WalkAndLearn }
                 )
                 Screen.MeasurementUnits -> MeasurementUnitsScreen(
                     viewModel = viewModel,
@@ -194,6 +205,26 @@ fun NutriGlassApp(
                     viewModel = viewModel,
                     onNavigateBack = { currentScreen = Screen.Home }
                 )
+                Screen.MonthlyReport -> MonthlyReportScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = Screen.Profile }
+                )
+                Screen.WalkAndLearn -> WalkAndLearnScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = Screen.Home },
+                    onOpenPdfReader = { bookId ->
+                        viewModel.selectBook(bookId)
+                        currentScreen = Screen.PdfReader
+                    }
+                )
+                Screen.PdfReader -> {
+                    val bookId = viewModel.selectedBookId.collectAsState().value ?: 0L
+                    PdfReaderScreen(
+                        viewModel = viewModel,
+                        bookId = bookId,
+                        onNavigateBack = { currentScreen = Screen.WalkAndLearn }
+                    )
+                }
             }
         }
     }

@@ -41,6 +41,10 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import org.json.JSONObject
 
+import com.example.domain.MonthlyReportEngine
+import com.example.domain.MonthlyReportSummary
+import com.example.data.model.MonthlyGoalTarget
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class HealthViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -48,6 +52,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _selectedDate = MutableStateFlow(repository.getTodayString())
     val selectedDate: StateFlow<String> = _selectedDate.asStateFlow()
+
+    private val _selectedMonthKey = MutableStateFlow(SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date()))
+    val selectedMonthKey: StateFlow<String> = _selectedMonthKey.asStateFlow()
 
     val userProfile: StateFlow<UserProfile> = repository.userProfile
         .flatMapLatest { profile ->
@@ -157,6 +164,199 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     val allWater: StateFlow<List<WaterEntry>> = repository.allWater
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentMonthlyGoalTarget: StateFlow<MonthlyGoalTarget> = _selectedMonthKey
+        .flatMapLatest { key ->
+            repository.getMonthlyGoalTarget(key).flatMapLatest { target ->
+                MutableStateFlow(target ?: MonthlyGoalTarget(monthKey = key))
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MonthlyGoalTarget(monthKey = "2026-10"))
+
+    val monthlyReportSummary: StateFlow<MonthlyReportSummary> = combine(
+        combine(_selectedMonthKey, currentMonthlyGoalTarget) { monthKey, target -> monthKey to target },
+        combine(allMeals, allWorkouts) { meals, workouts -> meals to workouts },
+        combine(weightHistory, userProfile) { weights, profile -> weights to profile }
+    ) { (monthKey, target), (meals, workouts), (weights, profile) ->
+        MonthlyReportEngine.generateMonthlySummary(
+            monthKey = monthKey,
+            meals = meals,
+            workouts = workouts,
+            steps = emptyList(),
+            weights = weights,
+            userProfile = profile,
+            goalTarget = target
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        MonthlyReportSummary(
+            monthKey = "2026-10",
+            monthDisplayName = "October 2026",
+            totalCaloriesConsumed = 0,
+            avgDailyCalorieIntake = 0,
+            totalExerciseCalories = 0,
+            avgDailyNetCalories = 0,
+            daysWithinCalorieTarget = 0,
+            daysExceedingCalorieTarget = 0,
+            daysLoggedMeals = 0,
+            totalWalkingDistanceKm = 0f,
+            totalWalkingDurationMinutes = 0,
+            totalWorkoutSessions = 0,
+            totalActivityCalories = 0,
+            avgDailySteps = 0,
+            daysActivityGoalAchieved = 0,
+            startingWeightKg = 70f,
+            latestWeightKg = 70f,
+            netWeightChangeKg = 0f,
+            targetWeightKg = 66f,
+            weightTrend = emptyList(),
+            walkingTrend = emptyList(),
+            calorieBalanceTrend = emptyList(),
+            goalsCompletedCount = 0,
+            goalsPartiallyCompletedCount = 0,
+            goalsMissedCount = 0,
+            overallMonthlyCompletionPct = 0,
+            insights = listOf("Start logging data to generate monthly insights."),
+            goalTarget = MonthlyGoalTarget(monthKey = "2026-10")
+        )
+    )
+
+    fun setMonthKey(monthKey: String) {
+        _selectedMonthKey.value = monthKey
+    }
+
+    fun saveMonthlyGoalTarget(target: MonthlyGoalTarget) {
+        viewModelScope.launch {
+            repository.saveMonthlyGoalTarget(target)
+        }
+    }
+
+    fun generateBackupJsonString(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val json = MonthlyReportEngine.generateDatabaseBackupJson(
+                profile = userProfile.value,
+                meals = allMeals.value,
+                weights = weightHistory.value,
+                workouts = allWorkouts.value,
+                steps = emptyList(),
+                water = allWater.value,
+                monthlyTargets = emptyList()
+            )
+            onResult(json)
+        }
+    }
+
+    fun restoreDatabaseFromJson(jsonString: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.restoreFromBackupJson(jsonString)
+            onResult(success)
+        }
+    }
+
+    // Walk & Learn PDF Reader Flows
+    val allBooks: StateFlow<List<com.example.data.model.BookEntity>> = repository.allBooks
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allBookmarks: StateFlow<List<com.example.data.model.BookmarkEntity>> = repository.allBookmarks
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allReadingSessions: StateFlow<List<com.example.data.model.ReadingSessionRecord>> = repository.allReadingSessions
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedBookId = MutableStateFlow<Long?>(null)
+    val selectedBookId: StateFlow<Long?> = _selectedBookId.asStateFlow()
+
+    fun selectBook(bookId: Long?) {
+        _selectedBookId.value = bookId
+    }
+
+    fun importPdfBook(context: android.content.Context, uri: android.net.Uri) {
+        viewModelScope.launch {
+            try {
+                // Request persistent URI permission if possible
+                val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            val metadata = com.example.domain.PdfEngine.extractBookMetadata(context, uri)
+            val book = com.example.data.model.BookEntity(
+                uriString = uri.toString(),
+                title = metadata.title,
+                author = metadata.author,
+                pageCount = metadata.pageCount,
+                lastPageRead = 0,
+                readingProgressPct = 0f,
+                lastReadTimestamp = System.currentTimeMillis()
+            )
+            repository.insertBook(book)
+        }
+    }
+
+    fun updateBookProgress(bookId: Long, page: Int, totalPages: Int) {
+        viewModelScope.launch {
+            val currentBook = repository.getBookByIdDirect(bookId)
+            if (currentBook != null) {
+                val progressPct = ((page.toFloat() + 1) / totalPages.coerceAtLeast(1) * 100f).coerceIn(0f, 100f)
+                val updated = currentBook.copy(
+                    lastPageRead = page,
+                    readingProgressPct = progressPct,
+                    lastReadTimestamp = System.currentTimeMillis()
+                )
+                repository.updateBook(updated)
+            }
+        }
+    }
+
+    fun addBookmark(bookId: Long, pageNumber: Int, note: String = "") {
+        viewModelScope.launch {
+            val bookmark = com.example.data.model.BookmarkEntity(
+                bookId = bookId,
+                pageNumber = pageNumber,
+                note = note,
+                timestamp = System.currentTimeMillis()
+            )
+            repository.insertBookmark(bookmark)
+        }
+    }
+
+    fun deleteBookmark(bookmarkId: Long) {
+        viewModelScope.launch {
+            repository.deleteBookmark(bookmarkId)
+        }
+    }
+
+    fun deleteBook(bookId: Long) {
+        viewModelScope.launch {
+            repository.deleteBook(bookId)
+        }
+    }
+
+    fun logReadingSession(
+        bookId: Long,
+        bookTitle: String,
+        durationSeconds: Long,
+        pagesReadCount: Int,
+        distanceWalkedMeters: Float = 0f,
+        caloriesBurned: Int = 0
+    ) {
+        viewModelScope.launch {
+            val session = com.example.data.model.ReadingSessionRecord(
+                bookId = bookId,
+                bookTitle = bookTitle,
+                dateString = repository.getTodayString(),
+                durationSeconds = durationSeconds,
+                pagesReadCount = pagesReadCount,
+                distanceWalkedMeters = distanceWalkedMeters,
+                caloriesBurned = caloriesBurned,
+                timestamp = System.currentTimeMillis()
+            )
+            repository.logReadingSession(session)
+        }
+    }
+
+
 
     fun setDate(dateString: String) {
         _selectedDate.value = dateString
@@ -350,7 +550,16 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    // --- Multi-Food Scanner Workflows (Gemini AI Vision) ---
+    // --- Food Vision Core & Multi-Mode Scanner Workflows ---
+    private val visionCore = com.example.vision.core.FoodVisionCore()
+    private val _visionMode = MutableStateFlow(com.example.vision.core.VisionProcessingMode.AUTO_HYBRID)
+    val visionMode: StateFlow<com.example.vision.core.VisionProcessingMode> = _visionMode.asStateFlow()
+
+    fun setVisionMode(mode: com.example.vision.core.VisionProcessingMode) {
+        _visionMode.value = mode
+        visionCore.setProcessingMode(mode)
+    }
+
     fun startMultiFoodScan(bitmap: Bitmap, imageUri: String?) {
         // Prevent duplicate scan requests while a scan is in flight
         if (_isScanAnalyzing.value) return
@@ -365,6 +574,14 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             try {
+                // If in ON_DEVICE_ONLY mode or Gemini is not configured, execute on-device vision directly
+                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.ON_DEVICE_ONLY ||
+                    !com.example.data.network.GeminiConfig.isConfigured()
+                ) {
+                    runOnDeviceScan(bitmap, imageUri)
+                    return@launch
+                }
+
                 _scanProgressStage.value = "Compressing & optimizing image..."
                 delay(200)
 
@@ -412,21 +629,107 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
                 _scanError.value = "Scanning cancelled."
                 _scanErrorType.value = null
             } catch (e: com.example.data.network.GeminiAnalysisException) {
-                // Surface exact diagnosed error rather than hiding it
-                _scanError.value = e.message
-                _scanErrorType.value = e.errorType
+                // If Auto Hybrid is enabled, seamlessly fall back to on-device neural food vision!
+                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID) {
+                    runOnDeviceScan(bitmap, imageUri)
+                } else {
+                    _scanError.value = e.message
+                    _scanErrorType.value = e.errorType
+                }
             } catch (e: Exception) {
-                _scanError.value = "AI could not analyze this photo: ${e.localizedMessage ?: "Unknown error"}. Check server API key and model."
-                _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
+                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID) {
+                    runOnDeviceScan(bitmap, imageUri)
+                } else {
+                    _scanError.value = "AI could not analyze this photo: ${e.localizedMessage ?: "Unknown error"}. Check server API key and model."
+                    _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
+                }
             } finally {
                 _isScanAnalyzing.value = false
             }
         }
     }
 
+    private suspend fun runOnDeviceScan(bitmap: Bitmap, imageUri: String?) {
+        _scanProgressStage.value = "Running on-device neural food vision..."
+        val frame = com.example.vision.core.FoodFrame(bitmap, imageUri)
+        when (val visionResult = visionCore.analyzeFoodFrame(frame)) {
+            is com.example.vision.core.VisionProcessingResult.Success -> {
+                val output = visionResult.data
+                val recognizedItems = output.items.map { item ->
+                    RecognizedFoodItem(
+                        id = item.id,
+                        foodName = item.label,
+                        nepaliName = item.nepaliLabel,
+                        preparationMethod = item.nutrients.preparationMethod,
+                        quantity = item.portionEstimate.quantity,
+                        unit = item.portionEstimate.unit,
+                        estimatedGrams = item.portionEstimate.estimatedGrams,
+                        calories = item.nutrients.energyKcal,
+                        protein = item.nutrients.proteinGrams,
+                        carbs = item.nutrients.carbsGrams,
+                        fat = item.nutrients.fatGrams,
+                        fiber = item.nutrients.fiberGrams ?: 1.5f,
+                        sodium = item.nutrients.sodiumMg ?: 50f,
+                        confidence = item.topPrediction?.confidence ?: 0.85f,
+                        uncertaintyNotes = item.portionEstimate.explanation,
+                        allergens = item.topPrediction?.likelyAllergens ?: emptyList(),
+                        requiresPortionConfirmation = item.portionEstimate.requiresUserConfirmation
+                    )
+                }
+                val mealTitle = if (output.items.isNotEmpty()) {
+                    output.items.joinToString(", ") { it.label }.take(35)
+                } else "Scanned Food"
+
+                val scanResult = MultiFoodScanResult(
+                    mealTitle = mealTitle,
+                    items = recognizedItems,
+                    totalCalories = output.totalNutrients.energyKcal,
+                    totalProtein = output.totalNutrients.proteinGrams,
+                    totalCarbs = output.totalNutrients.carbsGrams,
+                    totalFat = output.totalNutrients.fatGrams,
+                    totalFiber = output.totalNutrients.fiberGrams ?: 0f,
+                    totalSodium = output.totalNutrients.sodiumMg ?: 0f,
+                    overallConfidence = 0.88f,
+                    uncertaintyNotes = "Estimated on-device via NutriGlass VisionCore & verified nutrition database.",
+                    isOfflineFallback = true,
+                    modelUsed = "NutriGlass-OnDevice-V1.2"
+                )
+                _multiScanResult.value = scanResult
+
+                val allAllergens = recognizedItems.flatMap { it.allergens }.distinct().joinToString(", ")
+                repository.saveScan(
+                    FoodScanRecord(
+                        foodName = scanResult.mealTitle,
+                        nepaliName = recognizedItems.firstOrNull()?.nepaliName ?: "",
+                        portion = "${recognizedItems.size} items",
+                        estimatedCalories = scanResult.totalCalories,
+                        calorieRange = "±${(scanResult.totalCalories * 0.15f).toInt()} kcal",
+                        protein = scanResult.totalProtein,
+                        carbs = scanResult.totalCarbs,
+                        fat = scanResult.totalFat,
+                        fiber = scanResult.totalFiber,
+                        sugar = scanResult.totalSugar,
+                        sodium = scanResult.totalSodium,
+                        confidence = scanResult.overallConfidence,
+                        uncertaintyNotes = scanResult.uncertaintyNotes,
+                        itemsSummary = recognizedItems.joinToString(", ") { "${it.foodName} (${it.estimatedGrams.toInt()}g)" },
+                        allergens = allAllergens,
+                        healthierAlternatives = "Add green leafy vegetables or salad",
+                        imageUri = imageUri
+                    )
+                )
+            }
+            is com.example.vision.core.VisionProcessingResult.Error -> {
+                _scanError.value = visionResult.message
+            }
+            else -> {}
+        }
+    }
+
     fun cancelScan() {
         scanJob?.cancel()
         scanJob = null
+        visionCore.cancelActiveAnalysis()
         _isScanAnalyzing.value = false
         _scanProgressStage.value = null
         _scanError.value = "Scan cancelled."
@@ -439,11 +742,20 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun useOfflineProfileForCurrentScan() {
-        val fallback = com.example.data.network.GeminiFoodService.generateLocalMultiEstimate(lastScanUri)
-        _multiScanResult.value = fallback
-        _scanError.value = null
-        _scanErrorType.value = null
-        _isScanAnalyzing.value = false
+        val bitmap = lastScanBitmap
+        if (bitmap != null) {
+            viewModelScope.launch {
+                _isScanAnalyzing.value = true
+                runOnDeviceScan(bitmap, lastScanUri)
+                _isScanAnalyzing.value = false
+            }
+        } else {
+            val fallback = com.example.data.network.GeminiFoodService.generateLocalMultiEstimate(lastScanUri)
+            _multiScanResult.value = fallback
+            _scanError.value = null
+            _scanErrorType.value = null
+            _isScanAnalyzing.value = false
+        }
     }
 
     fun clearCurrentScan() {

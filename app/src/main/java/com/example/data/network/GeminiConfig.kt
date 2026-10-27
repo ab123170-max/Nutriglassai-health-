@@ -46,4 +46,13 @@ object GeminiConfig {
     fun getModelsListUrl(apiKey: String): String {
         return "$BASE_URL?key=$apiKey"
     }
+
+    fun isConfigured(): Boolean {
+        val key = try {
+            com.example.BuildConfig.GEMINI_API_KEY
+        } catch (e: Exception) {
+            ""
+        }
+        return !key.isNullOrBlank() && !key.equals("YOUR_GEMINI_API_KEY", ignoreCase = true)
+    }
 }

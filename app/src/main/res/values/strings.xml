@@ -1,3 +1,32 @@
 <resources>
     <string name="app_name">NutriGlass AI</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_food">Food</string>
+    <string name="nav_scan">AI Lens</string>
+    <string name="nav_activity">Activity</string>
+    <string name="nav_progress">Progress</string>
+    <string name="nav_profile">Profile</string>
+    <string name="title_language_selection">Choose Your Language</string>
+    <string name="subtitle_language_selection">Select your preferred language for nutrition tracking and AI scanning.</string>
+    <string name="search_languages">Search languages...</string>
+    <string name="btn_continue">Continue</string>
+    <string name="settings_language">Language</string>
+    <string name="scanner_title">AI Food Lens</string>
+    <string name="scanner_history">Scan History</string>
+    <string name="scanner_point_hint">Point at single food or full meal with multiple items</string>
+    <string name="scanner_analyzing">NutriGlass Vision AI Running...</string>
+    <string name="scanner_cancel">Cancel Scan</string>
+    <string name="scanner_retry">Retry Scan</string>
+    <string name="scanner_offline_profile">Use Offline Food Profile</string>
+    <string name="btn_confirm_save">Confirm and Save Meal</string>
+    <string name="label_calories">Calories</string>
+    <string name="label_protein">Protein</string>
+    <string name="label_carbs">Carbs</string>
+    <string name="label_fat">Fat</string>
+    <string name="label_fiber">Fiber</string>
+    <string name="label_sodium">Sodium</string>
+    <string name="water_title">Water Tracker</string>
+    <string name="weight_title">Weight &amp; Measurements</string>
+    <string name="sleep_title">Sleep Tracker</string>
+    <string name="steps_title">Pedometer &amp; Steps</string>
 </resources>

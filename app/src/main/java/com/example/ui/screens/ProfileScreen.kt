@@ -69,10 +69,16 @@ import com.example.ui.theme.HealthTeal
 import com.example.ui.theme.ProteinBlue
 import com.example.ui.viewmodel.HealthViewModel
 
+import androidx.compose.material.icons.filled.Assessment
+
+import androidx.compose.material.icons.filled.AutoStories
+
 @Composable
 fun ProfileScreen(
     viewModel: HealthViewModel,
     onNavigateToMeasurementUnits: () -> Unit,
+    onNavigateToMonthlyReport: () -> Unit = {},
+    onNavigateToWalkAndLearn: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -218,6 +224,70 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth().testTag("open_measurement_units_btn")
                     ) {
                         Text("Customize Measurement Units")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        // Monthly Progress Report & Database Backup Tile
+        item {
+            SamsungHealthCard(
+                title = "Monthly Progress & Backup",
+                icon = Icons.Default.Assessment,
+                iconTint = HealthTeal,
+                headerActionText = "View Report",
+                onHeaderActionClick = onNavigateToMonthlyReport
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToMonthlyReport() },
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("Monthly Progress Reports", "View Stats")
+                    GoalRow("Target Goal Planning", "Editable")
+                    GoalRow("CSV & JSON Backup/Restore", "Offline Local")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToMonthlyReport,
+                        modifier = Modifier.fillMaxWidth().testTag("open_monthly_report_btn")
+                    ) {
+                        Text("Open Monthly Progress Report")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        // Walk & Learn PDF Reader Tile
+        item {
+            SamsungHealthCard(
+                title = "Walk & Learn PDF Reader",
+                icon = Icons.Default.AutoStories,
+                iconTint = HealthTeal,
+                headerActionText = "Open Library",
+                onHeaderActionClick = onNavigateToWalkAndLearn
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToWalkAndLearn() },
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("PDF Reader & Text-to-Speech", "Read Aloud")
+                    GoalRow("Walk & Listen Mode", "GPS Active")
+                    GoalRow("Bookmarks & History", "Offline Local")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToWalkAndLearn,
+                        modifier = Modifier.fillMaxWidth().testTag("open_walk_and_learn_btn")
+                    ) {
+                        Text("Open Walk & Learn Section")
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
                     }

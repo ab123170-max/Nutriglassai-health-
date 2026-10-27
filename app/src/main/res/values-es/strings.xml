@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">NutriGlass AI</string>
+    <string name="nav_home">Inicio</string>
+    <string name="nav_food">Comida</string>
+    <string name="nav_scan">Lente IA</string>
+    <string name="nav_activity">Actividad</string>
+    <string name="nav_progress">Progreso</string>
+    <string name="nav_profile">Perfil</string>
+    <string name="title_language_selection">Elige tu idioma</string>
+    <string name="subtitle_language_selection">Selecciona tu idioma preferido para el seguimiento de nutrición y escaneo con IA.</string>
+    <string name="search_languages">Buscar idiomas...</string>
+    <string name="btn_continue">Continuar</string>
+    <string name="settings_language">Idioma</string>
+    <string name="scanner_title">Lente de Alimentos IA</string>
+    <string name="scanner_history">Historial de escendios</string>
+    <string name="scanner_point_hint">Apunta a un solo alimento o comida completa con múltiples elementos</string>
+    <string name="scanner_analyzing">NutriGlass Vision IA en ejecución...</string>
+    <string name="scanner_cancel">Cancelar escaneo</string>
+    <string name="scanner_retry">Reintentar</string>
+    <string name="scanner_offline_profile">Usar perfil de alimentos sin conexión</string>
+    <string name="btn_confirm_save">Confirmar y guardar comida</string>
+    <string name="label_calories">Calorías</string>
+    <string name="label_protein">Proteína</string>
+    <string name="label_carbs">Carbohidratos</string>
+    <string name="label_fat">Grasa</string>
+    <string name="label_fiber">Fibra</string>
+    <string name="label_sodium">Sodio</string>
+    <string name="water_title">Rastreador de agua</string>
+    <string name="weight_title">Peso y medidas</string>
+    <string name="sleep_title">Rastreador de sueño</string>
+    <string name="steps_title">Pasos y caminata</string>
+</resources>

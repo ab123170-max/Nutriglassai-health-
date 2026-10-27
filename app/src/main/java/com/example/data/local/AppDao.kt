@@ -147,6 +147,19 @@ interface HealthDao {
     @Query("DELETE FROM progress_photos WHERE id = :id")
     suspend fun deleteProgressPhoto(id: Long)
 
+    // Monthly Goals
+    @Query("SELECT * FROM monthly_goal_targets WHERE monthKey = :monthKey LIMIT 1")
+    fun getMonthlyGoalTarget(monthKey: String): Flow<com.example.data.model.MonthlyGoalTarget?>
+
+    @Query("SELECT * FROM monthly_goal_targets WHERE monthKey = :monthKey LIMIT 1")
+    suspend fun getMonthlyGoalTargetDirect(monthKey: String): com.example.data.model.MonthlyGoalTarget?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveMonthlyGoalTarget(target: com.example.data.model.MonthlyGoalTarget)
+
+    @Query("SELECT * FROM monthly_goal_targets")
+    fun getAllMonthlyGoalTargets(): Flow<List<com.example.data.model.MonthlyGoalTarget>>
+
     // Scans
     @Query("SELECT * FROM food_scan_records ORDER BY scannedAt DESC")
     fun getAllScans(): Flow<List<FoodScanRecord>>
@@ -156,6 +169,43 @@ interface HealthDao {
 
     @Query("UPDATE food_scan_records SET isLogged = 1 WHERE id = :id")
     suspend fun markScanLogged(id: Long)
+
+    // Books & PDF Reader
+    @Query("SELECT * FROM books ORDER BY lastReadTimestamp DESC")
+    fun getAllBooks(): Flow<List<com.example.data.model.BookEntity>>
+
+    @Query("SELECT * FROM books WHERE id = :id LIMIT 1")
+    fun getBookById(id: Long): Flow<com.example.data.model.BookEntity?>
+
+    @Query("SELECT * FROM books WHERE id = :id LIMIT 1")
+    suspend fun getBookByIdDirect(id: Long): com.example.data.model.BookEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBook(book: com.example.data.model.BookEntity): Long
+
+    @Update
+    suspend fun updateBook(book: com.example.data.model.BookEntity)
+
+    @Query("DELETE FROM books WHERE id = :id")
+    suspend fun deleteBook(id: Long)
+
+    @Query("SELECT * FROM bookmarks WHERE bookId = :bookId ORDER BY pageNumber ASC")
+    fun getBookmarksForBook(bookId: Long): Flow<List<com.example.data.model.BookmarkEntity>>
+
+    @Query("SELECT * FROM bookmarks ORDER BY timestamp DESC")
+    fun getAllBookmarks(): Flow<List<com.example.data.model.BookmarkEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBookmark(bookmark: com.example.data.model.BookmarkEntity): Long
+
+    @Query("DELETE FROM bookmarks WHERE id = :id")
+    suspend fun deleteBookmark(id: Long)
+
+    @Query("SELECT * FROM reading_sessions ORDER BY timestamp DESC")
+    fun getAllReadingSessions(): Flow<List<com.example.data.model.ReadingSessionRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReadingSession(session: com.example.data.model.ReadingSessionRecord): Long
 }
 
 @Dao

@@ -37,6 +37,17 @@ data class UserMeasurementPreferences(
     val usualBottleSizeMl: Int = 750
 )
 
+@Entity(tableName = "monthly_goal_targets")
+data class MonthlyGoalTarget(
+    @PrimaryKey val monthKey: String, // Format: "YYYY-MM" (e.g., "2026-10")
+    val targetWeightChangeKg: Float = -1.5f,
+    val targetWalkingDays: Int = 20,
+    val targetMonthlyWalkingDistanceKm: Float = 60f,
+    val targetWorkoutSessions: Int = 15,
+    val dailyCalorieTarget: Int = 2000,
+    val targetDaysMeetingNutritionGoal: Int = 20
+)
+
 @Entity(tableName = "meal_entries")
 data class MealEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -274,4 +285,44 @@ data class NutritionPeriodSummary(
     val daysLogged: Int,
     val targetMetDays: Int
 )
+
+@Entity(tableName = "books")
+data class BookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val uriString: String,
+    val title: String,
+    val author: String = "Unknown Author",
+    val pageCount: Int = 1,
+    val lastPageRead: Int = 0,
+    val readingProgressPct: Float = 0f,
+    val lastReadTimestamp: Long = System.currentTimeMillis(),
+    val speechSpeed: Float = 1.0f,
+    val languageCode: String = "en",
+    val coverImageUri: String? = null,
+    val totalReadingTimeSeconds: Long = 0,
+    val totalWalkingListeningMeters: Float = 0f
+)
+
+@Entity(tableName = "bookmarks")
+data class BookmarkEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Long,
+    val pageNumber: Int,
+    val note: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "reading_sessions")
+data class ReadingSessionRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val bookId: Long,
+    val bookTitle: String,
+    val dateString: String,
+    val durationSeconds: Long,
+    val pagesReadCount: Int,
+    val distanceWalkedMeters: Float = 0f,
+    val caloriesBurned: Int = 0,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 
