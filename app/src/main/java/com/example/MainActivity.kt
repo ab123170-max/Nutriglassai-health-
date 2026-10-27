@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -42,6 +43,7 @@ import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.AiCoachScreen
 import com.example.ui.screens.FoodScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.MeasurementUnitsScreen
 import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.ProgressScreen
@@ -59,6 +61,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Progress : Screen("progress", "Progress", Icons.Default.EmojiEvents)
     object Profile : Screen("profile", "Profile", Icons.Default.Person)
     object AiCoach : Screen("ai_coach", "AI Coach", Icons.Default.Home)
+    object MeasurementUnits : Screen("measurement_units", "Units", Icons.Default.Tune)
 }
 
 class MainActivity : ComponentActivity() {
@@ -101,13 +104,17 @@ fun NutriGlassApp(
 
     // Handle Android system back gesture safely
     BackHandler(enabled = currentScreen != Screen.Home) {
-        currentScreen = Screen.Home
+        if (currentScreen == Screen.MeasurementUnits) {
+            currentScreen = Screen.Profile
+        } else {
+            currentScreen = Screen.Home
+        }
     }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (currentScreen != Screen.AiCoach) {
+            if (currentScreen != Screen.AiCoach && currentScreen != Screen.MeasurementUnits) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp,
@@ -176,7 +183,12 @@ fun NutriGlassApp(
                     viewModel = viewModel
                 )
                 Screen.Profile -> ProfileScreen(
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                    onNavigateToMeasurementUnits = { currentScreen = Screen.MeasurementUnits }
+                )
+                Screen.MeasurementUnits -> MeasurementUnitsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = Screen.Profile }
                 )
                 Screen.AiCoach -> AiCoachScreen(
                     viewModel = viewModel,

@@ -31,27 +31,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -79,15 +88,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.example.data.model.FoodScanRecord
-import com.example.data.network.GeminiFoodService
+import com.example.data.model.RecognizedFoodItem
+import com.example.domain.FoodUnit
+import com.example.ui.components.SamsungHealthCard
 import com.example.ui.theme.CalorieGreen
+import com.example.ui.theme.CarbsAmber
+import com.example.ui.theme.FatRed
 import com.example.ui.theme.HealthNavy
 import com.example.ui.theme.HealthTeal
 import com.example.ui.theme.ProteinBlue
 import com.example.ui.viewmodel.HealthViewModel
-import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
+import java.util.UUID
 import java.util.concurrent.Executors
 
 @Composable
@@ -99,10 +111,14 @@ fun ScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val coroutineScope = rememberCoroutineScope()
-    val scans by viewModel.allScans.collectAsState()
 
-    var activeTab by remember { mutableIntStateOf(0) } // 0: Live Scanner, 1: Scan History
+    val scans by viewModel.allScans.collectAsState()
+    val multiScanResult by viewModel.multiScanResult.collectAsState()
+    val isAnalyzing by viewModel.isScanAnalyzing.collectAsState()
+    val scanProgressStage by viewModel.scanProgressStage.collectAsState()
+    val scanError by viewModel.scanError.collectAsState()
+
+    var activeTab by remember { mutableIntStateOf(0) } // 0: Live Lens, 1: Scan History
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -124,12 +140,13 @@ fun ScannerScreen(
 
     var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var scanResult by remember { mutableStateOf<FoodScanRecord?>(null) }
     var selectedMealType by remember { mutableStateOf("Lunch") }
-    var editedFoodName by remember { mutableStateOf("") }
-    var editedCalories by remember { mutableStateOf("") }
-    var editedGrams by remember { mutableStateOf("250") }
+
+    // Dialog state for adding an extra food component manually
+    var showAddExtraDialog by remember { mutableStateOf(false) }
+    var extraFoodName by remember { mutableStateOf("") }
+    var extraQuantity by remember { mutableStateOf("1") }
+    var extraUnit by remember { mutableStateOf("serving") }
 
     // Gallery Picker
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -141,18 +158,10 @@ fun ScannerScreen(
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
                 if (bitmap != null) {
-                    coroutineScope.launch {
-                        isAnalyzing = true
-                        val record = GeminiFoodService.analyzeFoodImage(bitmap, it.toString())
-                        scanResult = record
-                        editedFoodName = record.foodName
-                        editedCalories = record.estimatedCalories.toString()
-                        viewModel.saveScanRecord(record)
-                        isAnalyzing = false
-                    }
+                    viewModel.startMultiFoodScan(bitmap, it.toString())
                 }
             } catch (e: Exception) {
-                isAnalyzing = false
+                // Handled gracefully in ViewModel
             }
         }
     }
@@ -162,7 +171,7 @@ fun ScannerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Tab Header: Camera Scanner vs History
+        // Tab Header: Camera Lens vs Scan History
         TabRow(
             selectedTabIndex = activeTab,
             containerColor = HealthNavy,
@@ -198,7 +207,7 @@ fun ScannerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No scan records yet. Aim your camera at your meal to begin analysis.",
+                                text = "No scan records yet. Aim your camera at a meal or pick a photo from gallery to begin.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -217,7 +226,7 @@ fun ScannerScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = scan.foodName,
                                             style = MaterialTheme.typography.titleMedium,
@@ -230,6 +239,13 @@ fun ScannerScreen(
                                                 color = MaterialTheme.colorScheme.primary
                                             )
                                         }
+                                        if (scan.itemsSummary.isNotBlank()) {
+                                            Text(
+                                                text = "Components: ${scan.itemsSummary}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                     Text(
                                         text = "${scan.estimatedCalories} kcal",
@@ -240,7 +256,7 @@ fun ScannerScreen(
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "${scan.portion} • P: ${scan.protein}g C: ${scan.carbs}g F: ${scan.fat}g",
+                                    text = "P: ${scan.protein.toInt()}g • C: ${scan.carbs.toInt()}g • F: ${scan.fat.toInt()}g • Na: ${scan.sodium.toInt()}mg",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -258,7 +274,7 @@ fun ScannerScreen(
                 item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         } else {
-            // CAMERA SCANNER TAB
+            // CAMERA SCANNER VIEWPORT OR CONFIRMATION SCREEN
             Box(modifier = Modifier.fillMaxSize()) {
                 if (hasCameraPermission) {
                     AndroidView(
@@ -300,18 +316,18 @@ fun ScannerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 40.dp, vertical = 120.dp),
+                            .padding(horizontal = 30.dp, vertical = 110.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(280.dp)
+                                .size(290.dp)
                                 .clip(RoundedCornerShape(24.dp))
-                                .border(2.dp, HealthTeal.copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                                .border(2.dp, HealthTeal.copy(alpha = 0.85f), RoundedCornerShape(24.dp))
                         )
                     }
 
-                    // Top banner instructions
+                    // Top instructions banner
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -320,10 +336,10 @@ fun ScannerScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = Color.Black.copy(alpha = 0.65f)
+                            color = Color.Black.copy(alpha = 0.70f)
                         ) {
                             Text(
-                                text = "Align food or Nepali dish inside frame",
+                                text = "Point at single food or full meal with multiple items",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color.White,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -331,7 +347,7 @@ fun ScannerScreen(
                         }
                     }
 
-                    // Bottom controls
+                    // Bottom Camera Controls
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -366,24 +382,16 @@ fun ScannerScreen(
                                     .clickable {
                                         val capture = imageCapture
                                         if (capture != null && !isAnalyzing) {
-                                            isAnalyzing = true
                                             val executor = Executors.newSingleThreadExecutor()
                                             capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
                                                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
                                                     val bitmap = imageProxyToBitmap(imageProxy)
                                                     imageProxy.close()
-                                                    coroutineScope.launch {
-                                                        val record = GeminiFoodService.analyzeFoodImage(bitmap, null)
-                                                        scanResult = record
-                                                        editedFoodName = record.foodName
-                                                        editedCalories = record.estimatedCalories.toString()
-                                                        viewModel.saveScanRecord(record)
-                                                        isAnalyzing = false
-                                                    }
+                                                    viewModel.startMultiFoodScan(bitmap, null)
                                                 }
 
                                                 override fun onError(exception: ImageCaptureException) {
-                                                    coroutineScope.launch { isAnalyzing = false }
+                                                    // handled
                                                 }
                                             })
                                         }
@@ -399,7 +407,7 @@ fun ScannerScreen(
                                 )
                             }
 
-                            // Switch Camera
+                            // Flip Camera
                             IconButton(
                                 onClick = {
                                     lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
@@ -419,7 +427,7 @@ fun ScannerScreen(
                         }
                     }
                 } else {
-                    // Camera permission missing fallback
+                    // Permission Request Prompt
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -438,12 +446,12 @@ fun ScannerScreen(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Camera Permission Required",
+                                text = "Camera Access Required",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "NutriGlass AI uses the in-app camera to identify food, estimate nutrition, and recognize authentic South Asian dishes.",
+                                text = "NutriGlass AI uses the camera to recognize food items and compute nutrition.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -451,45 +459,120 @@ fun ScannerScreen(
                                 onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                                 modifier = Modifier.testTag("request_camera_perm_btn")
                             ) {
-                                Text("Grant Permission")
+                                Text("Allow Camera Access")
                             }
                             TextButton(onClick = { galleryLauncher.launch("image/*") }) {
-                                Text("Or Select Photo from Gallery")
+                                Text("Or Choose Photo from Gallery")
                             }
                         }
                     }
                 }
 
-                // Analyzing indicator overlay
+                // Multi-stage analyzing progress overlay
                 if (isAnalyzing) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.75f)),
+                            .background(Color.Black.copy(alpha = 0.82f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.padding(24.dp)
                         ) {
                             CircularProgressIndicator(color = HealthTeal, strokeWidth = 4.dp)
                             Text(
-                                text = "NutriGlass AI Analyzing Meal...",
+                                text = scanProgressStage ?: "NutriGlass Vision AI Running...",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                             Text(
-                                text = "Recognizing ingredients, portion & Nepali nutrition profile",
+                                text = "Detecting multiple dishes, portions, ingredients & allergens",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.LightGray
                             )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.cancelScan() },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                            ) {
+                                Text("Cancel Scan")
+                            }
                         }
                     }
                 }
 
-                // Scan Confirmation & Verification Result Sheet
-                scanResult?.let { record ->
+                // Error Diagnostic Card with Retry and Offline Profile options
+                if (scanError != null && !isAnalyzing && multiScanResult == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.80f))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                                Text(
+                                    text = "AI Food Analysis Diagnostic",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = scanError ?: "An error occurred during food scanning.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Button(
+                                    onClick = { viewModel.retryLastScan() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = HealthTeal)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Retry Scan", fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedButton(
+                                    onClick = { viewModel.useOfflineProfileForCurrentScan() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Restaurant, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Use Offline Nepali Food Profile")
+                                }
+
+                                TextButton(
+                                    onClick = { viewModel.clearCurrentScan() }
+                                ) {
+                                    Text("Dismiss")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // MULTI-FOOD CONFIRMATION AND EDITING SCREEN (Module 2 & 5)
+                multiScanResult?.let { result ->
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -501,7 +584,7 @@ fun ScannerScreen(
                             color = MaterialTheme.colorScheme.surface,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 100.dp)
+                                .padding(top = 60.dp)
                         ) {
                             LazyColumn(
                                 modifier = Modifier
@@ -515,93 +598,68 @@ fun ScannerScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Scan Results",
+                                                text = result.mealTitle,
                                                 style = MaterialTheme.typography.titleLarge,
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                text = "Confidence: ${(record.confidence * 100).toInt()}%",
+                                                text = "AI Confidence: ${(result.overallConfidence * 100).toInt()}% • Multi-Food Recognition",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = CalorieGreen,
                                                 fontWeight = FontWeight.SemiBold
                                             )
                                         }
 
-                                        IconButton(onClick = { scanResult = null }) {
-                                            Icon(Icons.Default.Close, contentDescription = "Close")
+                                        IconButton(onClick = { viewModel.clearCurrentScan() }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Cancel")
                                         }
                                     }
                                 }
 
+                                // Combined Meal Nutrition Banner
                                 item {
-                                    OutlinedTextField(
-                                        value = editedFoodName,
-                                        onValueChange = { editedFoodName = it },
-                                        label = { Text("Identified Food Name") },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-
-                                if (record.nepaliName.isNotBlank()) {
-                                    item {
-                                        Text(
-                                            text = "Nepali: ${record.nepaliName}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-
-                                item {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        OutlinedTextField(
-                                            value = editedCalories,
-                                            onValueChange = { editedCalories = it.filter { ch -> ch.isDigit() } },
-                                            label = { Text("Calories (kcal)") },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        OutlinedTextField(
-                                            value = editedGrams,
-                                            onValueChange = { editedGrams = it.filter { ch -> ch.isDigit() } },
-                                            label = { Text("Portion (g)") },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                }
-
-                                item {
-                                    // Macronutrient breakdown card
                                     Card(
-                                        shape = RoundedCornerShape(14.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(12.dp),
-                                            horizontalArrangement = Arrangement.SpaceAround
-                                        ) {
-                                            MacroBadge("Protein", "${record.protein}g", ProteinBlue)
-                                            MacroBadge("Carbs", "${record.carbs}g", Color(0xFFF59E0B))
-                                            MacroBadge("Fat", "${record.fat}g", Color(0xFFEF4444))
-                                            MacroBadge("Fiber", "${record.fiber}g", Color(0xFF8B5CF6))
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Total Combined Meal",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "${result.totalCalories} kcal",
+                                                    style = MaterialTheme.typography.titleLarge,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = CalorieGreen
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceAround
+                                            ) {
+                                                MacroItem("Protein", "${result.totalProtein.toInt()}g", ProteinBlue)
+                                                MacroItem("Carbs", "${result.totalCarbs.toInt()}g", CarbsAmber)
+                                                MacroItem("Fat", "${result.totalFat.toInt()}g", FatRed)
+                                                MacroItem("Fiber", "${result.totalFiber.toInt()}g", Color(0xFF8B5CF6))
+                                                MacroItem("Sodium", "${result.totalSodium.toInt()}mg", Color.Gray)
+                                            }
                                         }
                                     }
                                 }
 
+                                // Meal Type Selector (Breakfast, Lunch, Dinner, Snacks)
                                 item {
-                                    Text(
-                                        text = "Log to Meal:",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text("Log to Meal Category:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -617,42 +675,92 @@ fun ScannerScreen(
                                 }
 
                                 item {
-                                    Text(
-                                        text = "Note: Photo-based calorie estimates are approximations. Actual values depend on cooking oils and sodium content.",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Recognized Components (${result.items.size})",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        TextButton(onClick = { showAddExtraDialog = true }) {
+                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Add Food", fontSize = 12.sp)
+                                        }
+                                    }
+                                }
+
+                                // List of editable food items
+                                items(result.items) { item ->
+                                    EditableFoodComponentCard(
+                                        item = item,
+                                        onUpdate = { updatedName, qty, unit, method ->
+                                            viewModel.updateRecognizedItem(item.id, updatedName, qty, unit, method)
+                                        },
+                                        onRemove = {
+                                            viewModel.removeFoodComponentFromScan(item.id)
+                                        }
                                     )
                                 }
 
                                 item {
-                                    Button(
-                                        onClick = {
-                                            val cals = editedCalories.toIntOrNull() ?: record.estimatedCalories
-                                            val grams = editedGrams.toFloatOrNull() ?: 200f
-                                            viewModel.logMeal(
-                                                foodName = editedFoodName,
-                                                nepaliName = record.nepaliName,
-                                                mealType = selectedMealType,
-                                                portionGrams = grams,
-                                                calories = cals,
-                                                protein = record.protein,
-                                                carbs = record.carbs,
-                                                fat = record.fat,
-                                                fiber = record.fiber,
-                                                sugar = record.sugar,
-                                                portionDesc = "${grams.toInt()}g"
-                                            )
-                                            scanResult = null
-                                            onMealLogged()
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp)
-                                            .testTag("confirm_scan_add_btn")
-                                    ) {
-                                        Text("Confirm & Add to Food Diary")
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Photo-based calorie calculations are estimates. Cooking oils, salt, and dense sauces may alter values.",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 }
+
+                                // Action Buttons (Module 2.D)
+                                item {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Button(
+                                            onClick = {
+                                                viewModel.confirmAndSaveScannedMeal(selectedMealType)
+                                                onMealLogged()
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(52.dp)
+                                                .testTag("confirm_and_save_scan_btn"),
+                                            colors = ButtonDefaults.buttonColors(containerColor = HealthTeal)
+                                        ) {
+                                            Icon(Icons.Default.Check, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Confirm and Save Meal (${result.totalCalories} kcal)", fontWeight = FontWeight.Bold)
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = { viewModel.clearCurrentScan() },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Scan Again")
+                                            }
+
+                                            OutlinedButton(
+                                                onClick = { viewModel.clearCurrentScan() },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Cancel")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                item { Spacer(modifier = Modifier.height(40.dp)) }
                             }
                         }
                     }
@@ -660,13 +768,311 @@ fun ScannerScreen(
             }
         }
     }
+
+    // Add Extra Food Component Dialog
+    if (showAddExtraDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddExtraDialog = false },
+            title = { Text("Add Food to Meal", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = extraFoodName,
+                        onValueChange = { extraFoodName = it },
+                        label = { Text("Food Name (e.g. Papad, Pickle, Tea)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = extraQuantity,
+                            onValueChange = { extraQuantity = it },
+                            label = { Text("Quantity") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = extraUnit,
+                            onValueChange = { extraUnit = it },
+                            label = { Text("Unit (g, piece, bowl)") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (extraFoodName.isNotBlank()) {
+                        val qty = extraQuantity.toFloatOrNull() ?: 1f
+                        val newFood = RecognizedFoodItem(
+                            id = UUID.randomUUID().toString(),
+                            foodName = extraFoodName,
+                            quantity = qty,
+                            unit = extraUnit,
+                            estimatedGrams = qty * 100f,
+                            calories = 120,
+                            protein = 3f,
+                            carbs = 18f,
+                            fat = 3f,
+                            confidence = 1.0f
+                        )
+                        viewModel.addFoodComponentToScan(newFood)
+                        extraFoodName = ""
+                        showAddExtraDialog = false
+                    }
+                }) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddExtraDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun MacroBadge(label: String, value: String, color: Color) {
+fun EditableFoodComponentCard(
+    item: RecognizedFoodItem,
+    onUpdate: (name: String, quantity: Float, unit: String, method: String) -> Unit,
+    onRemove: () -> Unit
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var editName by remember(item) { mutableStateOf(item.foodName) }
+    var editQuantity by remember(item) { mutableStateOf(item.quantity.toString()) }
+    var editUnit by remember(item) { mutableStateOf(item.unit) }
+    var editMethod by remember(item) { mutableStateOf(item.preparationMethod) }
+    var unitMenuExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.foodName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (item.nepaliName.isNotBlank()) {
+                        Text(
+                            text = item.nepaliName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = "${item.quantity} ${item.unit} (~${item.estimatedGrams.toInt()}g) • ${item.preparationMethod}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${item.calories} kcal",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = CalorieGreen
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(onClick = { isEditing = !isEditing }, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Restaurant,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Remove",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // Portion confirmation note if uncertain
+            if (item.requiresPortionConfirmation || item.confidence < 0.8f) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFFEF3C7)
+                ) {
+                    Text(
+                        text = "⚠️ Please confirm serving size — visual depth uncertain",
+                        color = Color(0xFF92400E),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            // Quick nutritional stats
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "P: ${item.protein}g • C: ${item.carbs}g • F: ${item.fat}g • Fib: ${item.fiber}g • Na: ${item.sodium.toInt()}mg",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
+            )
+
+            // Allergens tags
+            if (item.allergens.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Allergens:", fontSize = 10.sp, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    item.allergens.forEach { allergen ->
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = allergen,
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Ingredients and visible dressings
+            if (item.ingredients.isNotEmpty()) {
+                Text(
+                    text = "Ingredients: ${item.ingredients.joinToString(", ")}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    fontSize = 10.sp
+                )
+            }
+
+            // Healthier alternatives
+            if (item.alternatives.isNotEmpty()) {
+                Text(
+                    text = "Healthier swaps: ${item.alternatives.joinToString(", ")}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = HealthTeal,
+                    fontSize = 10.sp
+                )
+            }
+
+            // Expandable inline editor
+            if (isEditing) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = {
+                            editName = it
+                            onUpdate(it, editQuantity.toFloatOrNull() ?: 1f, editUnit, editMethod)
+                        },
+                        label = { Text("Food Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editQuantity,
+                            onValueChange = {
+                                editQuantity = it
+                                val q = it.toFloatOrNull() ?: 1f
+                                onUpdate(editName, q, editUnit, editMethod)
+                            },
+                            label = { Text("Quantity") },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        // Unit dropdown selector
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = editUnit,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Unit") },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.Restaurant,
+                                        contentDescription = null,
+                                        modifier = Modifier.clickable { unitMenuExpanded = true }
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { unitMenuExpanded = true }
+                            )
+
+                            DropdownMenu(
+                                expanded = unitMenuExpanded,
+                                onDismissRequest = { unitMenuExpanded = false }
+                            ) {
+                                listOf(
+                                    FoodUnit.G,
+                                    FoodUnit.BOWL,
+                                    FoodUnit.PLATE,
+                                    FoodUnit.SERVING,
+                                    FoodUnit.CUP,
+                                    FoodUnit.KATORI,
+                                    FoodUnit.ROTI,
+                                    FoodUnit.MOMO_PIECE,
+                                    FoodUnit.PIECE,
+                                    FoodUnit.SLICE,
+                                    FoodUnit.GLASS,
+                                    FoodUnit.OZ,
+                                    FoodUnit.TBSP
+                                ).forEach { fUnit ->
+                                    DropdownMenuItem(
+                                        text = { Text(fUnit.displayName) },
+                                        onClick = {
+                                            editUnit = fUnit.symbol
+                                            unitMenuExpanded = false
+                                            onUpdate(editName, editQuantity.toFloatOrNull() ?: 1f, fUnit.symbol, editMethod)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = editMethod,
+                        onValueChange = {
+                            editMethod = it
+                            onUpdate(editName, editQuantity.toFloatOrNull() ?: 1f, editUnit, it)
+                        },
+                        label = { Text("Preparation (e.g. Steamed, Boiled, Fried)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MacroItem(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
     }
 }
 

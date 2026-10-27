@@ -21,12 +21,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,6 +59,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.NutritionEngine
+import com.example.domain.UnitConversionEngine
+import com.example.domain.WeightUnit
+import com.example.domain.HeightUnit
 import com.example.ui.components.SamsungHealthCard
 import com.example.ui.theme.CalorieGreen
 import com.example.ui.theme.HealthNavy
@@ -67,10 +72,12 @@ import com.example.ui.viewmodel.HealthViewModel
 @Composable
 fun ProfileScreen(
     viewModel: HealthViewModel,
+    onNavigateToMeasurementUnits: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val userProfile by viewModel.userProfile.collectAsState()
+    val measurementPrefs by viewModel.measurementPreferences.collectAsState()
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf(userProfile.name) }
@@ -88,6 +95,19 @@ fun ProfileScreen(
 
     var showExportDialog by remember { mutableStateOf(false) }
     var exportedJsonText by remember { mutableStateOf("") }
+
+    val currentWeightDisplay = UnitConversionEngine.formatWeight(
+        userProfile.weightKg,
+        WeightUnit.fromSymbol(measurementPrefs.weightUnit)
+    )
+    val targetWeightDisplay = UnitConversionEngine.formatWeight(
+        userProfile.targetWeightKg,
+        WeightUnit.fromSymbol(measurementPrefs.weightUnit)
+    )
+    val heightDisplay = UnitConversionEngine.formatHeight(
+        userProfile.heightCm,
+        HeightUnit.fromSymbol(measurementPrefs.heightUnit)
+    )
 
     LazyColumn(
         modifier = modifier
@@ -132,7 +152,7 @@ fun ProfileScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "${userProfile.gender} • ${userProfile.age} yrs • ${userProfile.heightCm.toInt()} cm",
+                                    text = "${userProfile.gender} • ${userProfile.age} yrs • $heightDisplay",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -162,10 +182,44 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        ProfileStatBadge("Current", "${userProfile.weightKg} kg")
-                        ProfileStatBadge("Target", "${userProfile.targetWeightKg} kg")
+                        ProfileStatBadge("Current", currentWeightDisplay)
+                        ProfileStatBadge("Target", targetWeightDisplay)
                         ProfileStatBadge("Target Cal", "${userProfile.dailyCalorieTarget} kcal")
                         ProfileStatBadge("Steps", "${userProfile.dailyStepGoal}")
+                    }
+                }
+            }
+        }
+
+        // Global Measurement Units Setting (Module 1 Requirement)
+        item {
+            SamsungHealthCard(
+                title = "Measurement Units",
+                icon = Icons.Default.Straighten,
+                iconTint = HealthTeal,
+                headerActionText = "Configure",
+                onHeaderActionClick = onNavigateToMeasurementUnits
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToMeasurementUnits() },
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("Weight Unit", measurementPrefs.weightUnit.uppercase())
+                    GoalRow("Height Unit", measurementPrefs.heightUnit)
+                    GoalRow("Food Unit", measurementPrefs.foodUnit)
+                    GoalRow("Water Unit", "${measurementPrefs.waterUnit} (Glass: ${measurementPrefs.usualGlassSizeMl}ml)")
+                    GoalRow("Distance Unit", measurementPrefs.distanceUnit)
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToMeasurementUnits,
+                        modifier = Modifier.fillMaxWidth().testTag("open_measurement_units_btn")
+                    ) {
+                        Text("Customize Measurement Units")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
                     }
                 }
             }

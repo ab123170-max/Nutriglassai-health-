@@ -30,6 +30,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,12 +52,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.FoodItem
 import com.example.data.model.MealEntry
+import com.example.domain.FoodUnit
+import com.example.domain.UnitConversionEngine
 import com.example.ui.components.SamsungHealthCard
 import com.example.ui.theme.CalorieGreen
 import com.example.ui.theme.CarbsAmber
@@ -72,23 +77,26 @@ fun FoodScreen(
     val meals by viewModel.mealsForDate.collectAsState()
     val allFoods by viewModel.allFoods.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
+    val measurementPrefs by viewModel.measurementPreferences.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Diary, 1: Nepali Food DB, 2: Custom Food
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategoryFilter by remember { mutableStateOf("All") }
 
-    // Dialog state for adding a food to diary
+    // Dialog state for logging food with full unit support
     var showAddMealDialog by remember { mutableStateOf(false) }
     var foodToLog by remember { mutableStateOf<FoodItem?>(null) }
     var mealTypeSelection by remember { mutableStateOf("Lunch") }
-    var gramsInput by remember { mutableStateOf("200") }
+    var quantityInput by remember { mutableStateOf("1") }
+    var unitSelection by remember { mutableStateOf("serving") }
+    var unitDropdownOpen by remember { mutableStateOf(false) }
 
-    // Barcode mock/manual dialog
+    // Barcode scanner simulation
     var showBarcodeDialog by remember { mutableStateOf(false) }
     var barcodeInput by remember { mutableStateOf("") }
     var barcodeLookupResult by remember { mutableStateOf<String?>(null) }
 
-    // Custom food creation dialog
+    // Custom food creation
     var showCustomFoodDialog by remember { mutableStateOf(false) }
     var customName by remember { mutableStateOf("") }
     var customNepaliName by remember { mutableStateOf("") }
@@ -98,6 +106,8 @@ fun FoodScreen(
     var customProtein by remember { mutableStateOf("5") }
     var customCarbs by remember { mutableStateOf("20") }
     var customFat by remember { mutableStateOf("3") }
+    var customFiber by remember { mutableStateOf("2") }
+    var customSodium by remember { mutableStateOf("50") }
 
     val categories = listOf("All", "Nepali Staples", "Dal & Pulses", "Vegetables & Saag", "Snacks & Street Food", "Proteins", "Beverages")
 
@@ -144,7 +154,7 @@ fun FoodScreen(
             }
         }
 
-        // Tabs: Food Diary | Nepali Database | Custom Recipe
+        // Tabs: Food Diary | Nepali Database | Add Custom Food
         ScrollableTabRow(
             selectedTabIndex = selectedTab,
             edgePadding = 16.dp,
@@ -159,18 +169,23 @@ fun FoodScreen(
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Nepali Database", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
+                text = { Text("Food Database", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
             )
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
                 text = { Text("Add Custom Food", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) }
             )
+            Tab(
+                selected = selectedTab == 3,
+                onClick = { selectedTab = 3 },
+                text = { Text("Nutrition Summaries", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal) }
+            )
         }
 
         when (selectedTab) {
             0 -> {
-                // DIARY TAB: Grouped by Breakfast, Lunch, Dinner, Snacks
+                // DIARY TAB: Breakfast, Lunch, Dinner, Snacks
                 val mealTypes = listOf("Breakfast", "Lunch", "Dinner", "Snacks")
                 LazyColumn(
                     modifier = Modifier
@@ -196,7 +211,7 @@ fun FoodScreen(
                             headerActionText = "+ Add",
                             onHeaderActionClick = {
                                 mealTypeSelection = mealType
-                                selectedTab = 1 // Switch to database to pick item
+                                selectedTab = 1
                             }
                         ) {
                             if (mealsInType.isEmpty()) {
@@ -283,7 +298,7 @@ fun FoodScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("food_search_input"),
-                        placeholder = { Text("Search Dal Bhat, Momo, Dhido, Oats...") },
+                        placeholder = { Text("Search Dal Bhat, Momo, Dhido, Oats, Roti...") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp)
@@ -307,10 +322,10 @@ fun FoodScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Filtered list
                     val filteredFoods = allFoods.filter { food ->
                         val matchesQuery = food.name.contains(searchQuery, ignoreCase = true) ||
-                                food.nepaliName.contains(searchQuery, ignoreCase = true)
+                                food.nepaliName.contains(searchQuery, ignoreCase = true) ||
+                                food.alternativeNames.contains(searchQuery, ignoreCase = true)
                         val matchesCategory = selectedCategoryFilter == "All" || food.category == selectedCategoryFilter
                         matchesQuery && matchesCategory
                     }
@@ -327,7 +342,8 @@ fun FoodScreen(
                                     .fillMaxWidth()
                                     .clickable {
                                         foodToLog = food
-                                        gramsInput = food.gramsPerServing.toInt().toString()
+                                        quantityInput = "1"
+                                        unitSelection = measurementPrefs.foodUnit.ifBlank { "serving" }
                                         showAddMealDialog = true
                                     }
                                     .testTag("food_item_${food.name.lowercase().replace(" ", "_")}")
@@ -374,8 +390,9 @@ fun FoodScreen(
                                         }
 
                                         Spacer(modifier = Modifier.height(4.dp))
+                                        val calsPer100g = food.getPer100gCalories().toInt()
                                         Text(
-                                            text = "${food.servingUnit} • P: ${food.protein}g C: ${food.carbs}g F: ${food.fat}g Fiber: ${food.fiber}g",
+                                            text = "${food.servingUnit} (${food.calories} kcal) • $calsPer100g kcal/100g\nP: ${food.protein}g • C: ${food.carbs}g • F: ${food.fat}g • Fib: ${food.fiber}g",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 11.sp
@@ -419,7 +436,7 @@ fun FoodScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Add your home recipe, traditional meal, or South Asian delicacy with per-serving nutrition.",
+                            text = "Add your home recipe, traditional meal, or South Asian delicacy with per-serving and per-100g nutrition.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -453,7 +470,7 @@ fun FoodScreen(
                             OutlinedTextField(
                                 value = customGrams,
                                 onValueChange = { customGrams = it.filter { ch -> ch.isDigit() } },
-                                label = { Text("Serving (g)") },
+                                label = { Text("Default Serving (g)") },
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
@@ -492,27 +509,74 @@ fun FoodScreen(
                     }
 
                     item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = customFiber,
+                                onValueChange = { customFiber = it },
+                                label = { Text("Fiber (g)") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = customSodium,
+                                onValueChange = { customSodium = it.filter { ch -> ch.isDigit() } },
+                                label = { Text("Sodium (mg)") },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    item {
                         Button(
                             onClick = {
                                 if (customName.isNotBlank()) {
+                                    val servingGrams = customGrams.toFloatOrNull() ?: 100f
+                                    val cals = customCalories.toIntOrNull() ?: 150
+                                    val p = customProtein.toFloatOrNull() ?: 5f
+                                    val c = customCarbs.toFloatOrNull() ?: 20f
+                                    val f = customFat.toFloatOrNull() ?: 3f
+                                    val fib = customFiber.toFloatOrNull() ?: 2f
+                                    val sod = customSodium.toFloatOrNull() ?: 50f
+
                                     val newFood = FoodItem(
                                         name = customName,
                                         nepaliName = customNepaliName,
                                         category = customCategory,
-                                        servingUnit = "${customGrams}g serving",
-                                        gramsPerServing = customGrams.toFloatOrNull() ?: 100f,
-                                        calories = customCalories.toIntOrNull() ?: 150,
-                                        protein = customProtein.toFloatOrNull() ?: 5f,
-                                        carbs = customCarbs.toFloatOrNull() ?: 20f,
-                                        fat = customFat.toFloatOrNull() ?: 3f,
+                                        servingUnit = "${servingGrams.toInt()}g serving",
+                                        gramsPerServing = servingGrams,
+                                        calories = cals,
+                                        protein = p,
+                                        carbs = c,
+                                        fat = f,
+                                        fiber = fib,
+                                        caloriesPer100g = (cals / servingGrams * 100f),
+                                        proteinPer100g = (p / servingGrams * 100f),
+                                        carbsPer100g = (c / servingGrams * 100f),
+                                        fatPer100g = (f / servingGrams * 100f),
+                                        fibrePer100g = (fib / servingGrams * 100f),
+                                        sodiumPer100g = (sod / servingGrams * 100f),
+                                        defaultServingGrams = servingGrams,
                                         isNepaliDish = customNepaliName.isNotBlank(),
                                         isVerified = false
                                     )
-                                    // Insert into database and reset
-                                    viewModel.viewModelScopeLaunchCustom(newFood)
+                                    viewModel.logMeal(
+                                        foodName = newFood.name,
+                                        nepaliName = newFood.nepaliName,
+                                        mealType = "Lunch",
+                                        portionGrams = servingGrams,
+                                        calories = cals,
+                                        protein = p,
+                                        carbs = c,
+                                        fat = f,
+                                        fiber = fib,
+                                        sugar = 0f,
+                                        portionDesc = "${servingGrams.toInt()}g"
+                                    )
                                     customName = ""
                                     customNepaliName = ""
-                                    selectedTab = 1
+                                    selectedTab = 0
                                 }
                             },
                             modifier = Modifier
@@ -520,24 +584,47 @@ fun FoodScreen(
                                 .height(50.dp)
                                 .testTag("save_custom_food_btn")
                         ) {
-                            Text("Save to Food Database")
+                            Text("Save to Food Diary & Database")
                         }
                     }
                     item { Spacer(modifier = Modifier.height(80.dp)) }
                 }
             }
+
+            3 -> {
+                // NUTRITION SUMMARIES (Daily, Weekly, Monthly)
+                NutritionSummariesTab(viewModel = viewModel)
+            }
         }
     }
 
-    // Add Meal Dialog to pick meal type and grams
+    // Interactive Add Meal Dialog with Module 1 Measurement Units & Immediate Recalculation
     if (showAddMealDialog && foodToLog != null) {
         val food = foodToLog!!
-        val enteredGrams = gramsInput.toFloatOrNull() ?: food.gramsPerServing
-        val multiplier = if (food.gramsPerServing > 0) enteredGrams / food.gramsPerServing else 1f
-        val calculatedCals = (food.calories * multiplier).toInt()
-        val calculatedProtein = food.protein * multiplier
-        val calculatedCarbs = food.carbs * multiplier
-        val calculatedFat = food.fat * multiplier
+        val qty = quantityInput.toFloatOrNull() ?: 1f
+        val foodUnit = FoodUnit.fromSymbol(unitSelection)
+
+        val calsPer100g = food.getPer100gCalories()
+        val pPer100g = food.getPer100gProtein()
+        val cPer100g = food.getPer100gCarbs()
+        val fPer100g = food.getPer100gFat()
+        val fibPer100g = food.getPer100gFiber()
+        val sugPer100g = food.getPer100gSugar()
+        val sodPer100g = food.sodiumPer100g
+
+        val calculated = UnitConversionEngine.calculateNutrition(
+            caloriesPer100g = calsPer100g,
+            proteinPer100g = pPer100g,
+            carbsPer100g = cPer100g,
+            fatPer100g = fPer100g,
+            fiberPer100g = fibPer100g,
+            sugarPer100g = sugPer100g,
+            sodiumPer100g = sodPer100g,
+            foodName = food.name,
+            quantity = qty,
+            unit = foodUnit,
+            defaultServingGrams = food.gramsPerServing
+        )
 
         AlertDialog(
             onDismissRequest = { showAddMealDialog = false },
@@ -565,29 +652,104 @@ fun FoodScreen(
                         }
                     }
 
-                    OutlinedTextField(
-                        value = gramsInput,
-                        onValueChange = { gramsInput = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("Portion in Grams") },
-                        trailingIcon = { Text("g", modifier = Modifier.padding(end = 12.dp)) },
-                        modifier = Modifier.fillMaxWidth().testTag("portion_grams_input")
-                    )
+                    // Quantity and Unit Selectors
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = quantityInput,
+                            onValueChange = { quantityInput = it },
+                            label = { Text("Quantity") },
+                            modifier = Modifier.weight(1f).testTag("portion_quantity_input")
+                        )
 
+                        Box(modifier = Modifier.weight(1.3f)) {
+                            OutlinedTextField(
+                                value = foodUnit.displayName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Measurement Unit") },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.RestaurantMenu,
+                                        contentDescription = null,
+                                        modifier = Modifier.clickable { unitDropdownOpen = true }
+                                    )
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { unitDropdownOpen = true }
+                                    .testTag("unit_selector_field")
+                            )
+
+                            DropdownMenu(
+                                expanded = unitDropdownOpen,
+                                onDismissRequest = { unitDropdownOpen = false }
+                            ) {
+                                listOf(
+                                    FoodUnit.G,
+                                    FoodUnit.BOWL,
+                                    FoodUnit.PLATE,
+                                    FoodUnit.SERVING,
+                                    FoodUnit.KATORI,
+                                    FoodUnit.ROTI,
+                                    FoodUnit.CHAPATI,
+                                    FoodUnit.MOMO_PIECE,
+                                    FoodUnit.PIECE,
+                                    FoodUnit.SLICE,
+                                    FoodUnit.CUP,
+                                    FoodUnit.CUP_OF_RICE,
+                                    FoodUnit.TBSP,
+                                    FoodUnit.TSP,
+                                    FoodUnit.ML,
+                                    FoodUnit.GLASS,
+                                    FoodUnit.BOTTLE,
+                                    FoodUnit.OZ,
+                                    FoodUnit.LB,
+                                    FoodUnit.KG,
+                                    FoodUnit.EGG,
+                                    FoodUnit.IDLI_PIECE
+                                ).forEach { u ->
+                                    DropdownMenuItem(
+                                        text = { Text(u.displayName) },
+                                        onClick = {
+                                            unitSelection = u.symbol
+                                            unitDropdownOpen = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Live calculated nutrition card
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${calculated.calories} kcal",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Weight: ${calculated.normalizedGrams.toInt()}g",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Estimated: $calculatedCals kcal",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Protein: ${calculatedProtein.toInt()}g | Carbs: ${calculatedCarbs.toInt()}g | Fat: ${calculatedFat.toInt()}g",
+                                text = "Protein: ${calculated.protein}g • Carbs: ${calculated.carbs}g • Fat: ${calculated.fat}g • Fib: ${calculated.fiber}g • Na: ${calculated.sodium.toInt()}mg",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -601,21 +763,24 @@ fun FoodScreen(
                             foodName = food.name,
                             nepaliName = food.nepaliName,
                             mealType = mealTypeSelection,
-                            portionGrams = enteredGrams,
-                            calories = calculatedCals,
-                            protein = calculatedProtein,
-                            carbs = calculatedCarbs,
-                            fat = calculatedFat,
-                            fiber = food.fiber * multiplier,
-                            sugar = food.sugar * multiplier,
-                            portionDesc = "${enteredGrams.toInt()}g"
+                            portionGrams = calculated.normalizedGrams,
+                            calories = calculated.calories,
+                            protein = calculated.protein,
+                            carbs = calculated.carbs,
+                            fat = calculated.fat,
+                            fiber = calculated.fiber,
+                            sugar = calculated.sugar,
+                            sodium = calculated.sodium,
+                            unit = foodUnit.symbol,
+                            quantity = qty,
+                            portionDesc = "$qty ${foodUnit.displayName} (${calculated.normalizedGrams.toInt()}g)"
                         )
                         showAddMealDialog = false
-                        selectedTab = 0 // Switch back to diary
+                        selectedTab = 0
                     },
                     modifier = Modifier.testTag("confirm_log_meal_btn")
                 ) {
-                    Text("Add to Diary")
+                    Text("Add to Food Diary")
                 }
             },
             dismissButton = {
@@ -662,7 +827,6 @@ fun FoodScreen(
                     onClick = {
                         if (barcodeInput.isNotBlank()) {
                             barcodeLookupResult = "Packaged Product Identified: Standard Whole Wheat Biscuits (120 kcal / 2 biscuits). Added to selection."
-                            // Preload food to log
                             foodToLog = FoodItem(
                                 name = "Packaged Biscuit ($barcodeInput)",
                                 nepaliName = "बिस्कुट",
@@ -692,19 +856,186 @@ fun FoodScreen(
     }
 }
 
-// Extension helper for ViewModel custom food insertion
-private fun HealthViewModel.viewModelScopeLaunchCustom(food: FoodItem) {
-    // Save to repository via logMeal or custom food
-    logMeal(
-        foodName = food.name,
-        nepaliName = food.nepaliName,
-        mealType = "Lunch",
-        portionGrams = food.gramsPerServing,
-        calories = food.calories,
-        protein = food.protein,
-        carbs = food.carbs,
-        fat = food.fat,
-        fiber = food.fiber,
-        sugar = food.sugar
-    )
+@Composable
+fun NutritionSummariesTab(
+    viewModel: HealthViewModel,
+    modifier: Modifier = Modifier
+) {
+    // 0: Today (Daily), 1: Last 7 Days (Weekly), 2: Last 30 Days (Monthly)
+    var periodSelection by remember { mutableIntStateOf(1) }
+    val (periodDays, periodLabel) = when (periodSelection) {
+        0 -> 1 to "Today (Daily)"
+        1 -> 7 to "Last 7 Days (Weekly)"
+        else -> 30 to "Last 30 Days (Monthly)"
+    }
+
+    val allMeals by viewModel.allMeals.collectAsState()
+    val allWater by viewModel.allWater.collectAsState()
+    val summary = remember(allMeals, allWater, periodDays) {
+        viewModel.calculateNutritionSummary(periodDays, periodLabel)
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Text(
+                text = "Nutrition Summaries & Trends",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Track your calorie intake, macronutrients, and hydration over daily, weekly, and monthly intervals.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Period filter chips
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("Daily", "Weekly (7d)", "Monthly (30d)").forEachIndexed { index, title ->
+                    FilterChip(
+                        selected = periodSelection == index,
+                        onClick = { periodSelection = index },
+                        label = { Text(title, fontSize = 12.sp, fontWeight = if (periodSelection == index) FontWeight.Bold else FontWeight.Normal) }
+                    )
+                }
+            }
+        }
+
+        // Summary Card
+        item {
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = summary.periodLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "${summary.averageCaloriesPerDay} kcal",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = CalorieGreen
+                            )
+                            Text(
+                                text = "Daily Average (Total: ${summary.totalCalories} kcal)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = CalorieGreen.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "${summary.targetMetDays} / ${summary.daysLogged.coerceAtLeast(1)} Target Days",
+                                color = CalorieGreen,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Macronutrient Breakdown
+        item {
+            Text(
+                text = "Macronutrient Averages",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SummaryMacroBox("Protein", "${summary.averageProteinPerDay}g", "Total: ${summary.totalProtein.toInt()}g", ProteinBlue, Modifier.weight(1f))
+                SummaryMacroBox("Carbs", "${summary.averageCarbsPerDay}g", "Total: ${summary.totalCarbs.toInt()}g", CarbsAmber, Modifier.weight(1f))
+                SummaryMacroBox("Fat", "${summary.averageFatPerDay}g", "Total: ${summary.totalFat.toInt()}g", FatRed, Modifier.weight(1f))
+            }
+        }
+
+        // Secondary Nutrients & Water
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SummaryMetricRow("Dietary Fiber", "${summary.totalFiber.toInt()}g total", "${(summary.totalFiber / periodDays.coerceAtLeast(1) * 10).toInt() / 10f}g / day")
+                    SummaryMetricRow("Estimated Sodium", "${summary.totalSodium.toInt()}mg total", "${(summary.totalSodium / periodDays.coerceAtLeast(1)).toInt()}mg / day")
+                    SummaryMetricRow("Hydration Water", "${summary.totalWaterMl} ml total", "${summary.averageWaterMlPerDay} ml / day")
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(80.dp)) }
+    }
 }
+
+@Composable
+private fun SummaryMacroBox(
+    title: String,
+    avg: String,
+    total: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.10f)),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(title, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(avg, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            Text(total, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+private fun SummaryMetricRow(title: String, total: String, avg: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+        Column(horizontalAlignment = Alignment.End) {
+            Text(avg, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            Text(total, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+        }
+    }
+}
+

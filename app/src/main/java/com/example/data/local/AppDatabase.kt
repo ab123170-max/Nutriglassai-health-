@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 @Database(
     entities = [
         UserProfile::class,
+        com.example.data.model.UserMeasurementPreferences::class,
         MealEntry::class,
         FoodItem::class,
         WaterEntry::class,
@@ -34,7 +35,7 @@ import kotlinx.coroutines.launch
         ProgressPhoto::class,
         FoodScanRecord::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -54,7 +55,8 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nutriglass_health.db"
-                ).addCallback(object : Callback() {
+                ).fallbackToDestructiveMigration()
+                .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
                         INSTANCE?.let { database ->
@@ -65,6 +67,8 @@ abstract class AppDatabase : RoomDatabase() {
                                 database.achievementDao().initAchievements(PreloadedData.allAchievements)
                                 // Prepopulate default profile
                                 database.healthDao().saveUserProfile(UserProfile())
+                                // Prepopulate default measurement preferences
+                                database.healthDao().saveMeasurementPreferences(com.example.data.model.UserMeasurementPreferences())
                             }
                         }
                     }

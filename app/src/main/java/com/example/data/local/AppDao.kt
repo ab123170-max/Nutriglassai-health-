@@ -57,6 +57,12 @@ interface FoodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFood(food: FoodItem): Long
 
+    @Query("SELECT * FROM food_database WHERE id = :id LIMIT 1")
+    suspend fun getFoodById(id: Long): FoodItem?
+
+    @Query("SELECT * FROM food_database WHERE name = :name LIMIT 1")
+    suspend fun getFoodByName(name: String): FoodItem?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFoods(foods: List<FoodItem>)
 
@@ -72,9 +78,18 @@ interface HealthDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveUserProfile(profile: UserProfile)
 
+    @Query("SELECT * FROM user_measurement_preferences WHERE id = 1 LIMIT 1")
+    fun getMeasurementPreferences(): Flow<com.example.data.model.UserMeasurementPreferences?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveMeasurementPreferences(preferences: com.example.data.model.UserMeasurementPreferences)
+
     // Water
     @Query("SELECT * FROM water_entries WHERE dateString = :date ORDER BY timestamp ASC")
     fun getWaterForDate(date: String): Flow<List<WaterEntry>>
+
+    @Query("SELECT * FROM water_entries ORDER BY timestamp DESC")
+    fun getAllWaterEntries(): Flow<List<WaterEntry>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWater(entry: WaterEntry): Long

@@ -25,14 +25,30 @@ data class UserProfile(
     val onboardingCompleted: Boolean = false
 )
 
+@Entity(tableName = "user_measurement_preferences")
+data class UserMeasurementPreferences(
+    @PrimaryKey val id: Int = 1,
+    val weightUnit: String = "kg", // "kg", "g", "lb", "st"
+    val heightUnit: String = "cm", // "cm", "m", "ft_in", "in"
+    val foodUnit: String = "g", // "g", "oz", "serving", "cup"
+    val waterUnit: String = "ml", // "ml", "L", "fl_oz", "glass", "bottle"
+    val distanceUnit: String = "km", // "km", "mi", "m"
+    val usualGlassSizeMl: Int = 250,
+    val usualBottleSizeMl: Int = 750
+)
+
 @Entity(tableName = "meal_entries")
 data class MealEntry(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val foodItemId: Long = 0,
     val dateString: String, // YYYY-MM-DD
     val mealType: String, // "Breakfast", "Lunch", "Dinner", "Snacks"
     val foodName: String,
     val nepaliName: String = "",
     val portionDescription: String = "1 serving",
+    val quantity: Float = 1f,
+    val unit: String = "serving",
+    val normalizedWeightGrams: Float = 200f,
     val portionGrams: Float = 200f,
     val calories: Int,
     val protein: Float = 0f,
@@ -40,8 +56,14 @@ data class MealEntry(
     val fat: Float = 0f,
     val fiber: Float = 0f,
     val sugar: Float = 0f,
+    val sodium: Float = 0f,
     val imageUri: String? = null,
+    val imageReference: String? = null,
+    val estimationMethod: String = "MANUAL", // "AI_VISION", "MANUAL", "BARCODE", "DATABASE"
+    val confidence: Float = 1.0f,
+    val userConfirmed: Boolean = true,
     val isVerified: Boolean = true,
+    val preparationMethod: String = "Standard",
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -49,20 +71,49 @@ data class MealEntry(
 data class FoodItem(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    val alternativeNames: String = "",
     val nepaliName: String = "",
-    val category: String, // "Nepali Staples", "Dal & Pulses", "Vegetables & Saag", "Snacks & Street Food", "Proteins", "Beverages"
-    val servingUnit: String,
-    val gramsPerServing: Float,
-    val calories: Int,
-    val protein: Float,
-    val carbs: Float,
-    val fat: Float,
-    val fiber: Float = 0f,
-    val sugar: Float = 0f,
+    val category: String = "Nepali Staples",
+    val servingUnit: String = "1 serving",
+    val gramsPerServing: Float = 100f,
+    val calories: Int = 150,
+    val protein: Float = 5f,
+    val carbs: Float = 20f,
+    val fat: Float = 3f,
+    val fiber: Float = 2f,
+    val sugar: Float = 1f,
+    val sodiumPer100g: Float = 50f,
+    val caloriesPer100g: Float = 150f,
+    val proteinPer100g: Float = 5f,
+    val carbsPer100g: Float = 20f,
+    val fatPer100g: Float = 3f,
+    val fibrePer100g: Float = 2f,
+    val sugarPer100g: Float = 1f,
+    val defaultServingGrams: Float = 100f,
+    val nutritionSource: String = "NutriGlass Verified DB",
+    val lastUpdated: Long = System.currentTimeMillis(),
     val isNepaliDish: Boolean = true,
     val isVerified: Boolean = true,
     val barcode: String? = null
-)
+) {
+    fun getPer100gCalories(): Float =
+        if (caloriesPer100g > 0 && caloriesPer100g != 150f) caloriesPer100g else (calories.toFloat() / gramsPerServing.coerceAtLeast(1f)) * 100f
+
+    fun getPer100gProtein(): Float =
+        if (proteinPer100g > 0 && proteinPer100g != 5f) proteinPer100g else (protein / gramsPerServing.coerceAtLeast(1f)) * 100f
+
+    fun getPer100gCarbs(): Float =
+        if (carbsPer100g > 0 && carbsPer100g != 20f) carbsPer100g else (carbs / gramsPerServing.coerceAtLeast(1f)) * 100f
+
+    fun getPer100gFat(): Float =
+        if (fatPer100g > 0 && fatPer100g != 3f) fatPer100g else (fat / gramsPerServing.coerceAtLeast(1f)) * 100f
+
+    fun getPer100gFiber(): Float =
+        if (fibrePer100g > 0 && fibrePer100g != 2f) fibrePer100g else (fiber / gramsPerServing.coerceAtLeast(1f)) * 100f
+
+    fun getPer100gSugar(): Float =
+        if (sugarPer100g > 0 && sugarPer100g != 1f) sugarPer100g else (sugar / gramsPerServing.coerceAtLeast(1f)) * 100f
+}
 
 @Entity(tableName = "water_entries")
 data class WaterEntry(
@@ -86,7 +137,7 @@ data class StepRecord(
 data class WorkoutSession(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val dateString: String,
-    val workoutType: String, // "Outdoor Walk", "Running", "Cardio HIIT", "Strength Training", "Bodyweight", "Yoga & Stretch"
+    val workoutType: String,
     val durationSeconds: Long,
     val distanceMeters: Float = 0f,
     val caloriesBurned: Int,
@@ -112,7 +163,7 @@ data class SleepRecord(
     val bedtimeMillis: Long,
     val wakeTimeMillis: Long,
     val durationMinutes: Int,
-    val qualityRating: Int = 4, // 1 to 5
+    val qualityRating: Int = 4,
     val notes: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )
@@ -122,8 +173,8 @@ data class Achievement(
     @PrimaryKey val code: String,
     val title: String,
     val description: String,
-    val category: String, // "Nutrition", "Hydration", "Steps", "Workout", "Habits"
-    val level: Int, // 1 to 20
+    val category: String,
+    val level: Int,
     val isUnlocked: Boolean = false,
     val unlockedAt: Long? = null
 )
@@ -151,9 +202,76 @@ data class FoodScanRecord(
     val fat: Float = 0f,
     val fiber: Float = 0f,
     val sugar: Float = 0f,
+    val sodium: Float = 50f,
     val confidence: Float = 0.90f,
     val uncertaintyNotes: String = "",
+    val preparationMethod: String = "Standard",
+    val itemsSummary: String = "",
+    val allergens: String = "",
+    val healthierAlternatives: String = "",
     val imageUri: String? = null,
     val scannedAt: Long = System.currentTimeMillis(),
     val isLogged: Boolean = false
 )
+
+// UI and Scanner Multi-Food Models
+data class RecognizedFoodItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val foodName: String,
+    val nepaliName: String = "",
+    val preparationMethod: String = "Standard",
+    val quantity: Float = 1f,
+    val unit: String = "serving",
+    val estimatedGrams: Float = 150f,
+    val calories: Int = 200,
+    val protein: Float = 5f,
+    val carbs: Float = 30f,
+    val fat: Float = 5f,
+    val fiber: Float = 2f,
+    val sugar: Float = 1f,
+    val sodium: Float = 50f,
+    val confidence: Float = 0.85f,
+    val uncertaintyNotes: String = "",
+    val ingredients: List<String> = emptyList(),
+    val likelyOilsOrSauces: String = "",
+    val allergens: List<String> = emptyList(),
+    val alternatives: List<String> = emptyList(),
+    val requiresPortionConfirmation: Boolean = false
+)
+
+data class MultiFoodScanResult(
+    val mealTitle: String = "Identified Meal",
+    val items: List<RecognizedFoodItem> = emptyList(),
+    val totalCalories: Int = 0,
+    val totalProtein: Float = 0f,
+    val totalCarbs: Float = 0f,
+    val totalFat: Float = 0f,
+    val totalFiber: Float = 0f,
+    val totalSugar: Float = 0f,
+    val totalSodium: Float = 0f,
+    val overallConfidence: Float = 0.85f,
+    val uncertaintyNotes: String = "",
+    val disclaimer: String = "Nutritional values are AI-estimated approximations and should not replace clinical medical advice. Please confirm portion sizes before logging.",
+    val imageUri: String? = null,
+    val modelUsed: String = "gemini-2.5-flash",
+    val isOfflineFallback: Boolean = false
+)
+
+data class NutritionPeriodSummary(
+    val periodLabel: String,
+    val totalCalories: Int,
+    val averageCaloriesPerDay: Int,
+    val totalProtein: Float,
+    val averageProteinPerDay: Float,
+    val totalCarbs: Float,
+    val averageCarbsPerDay: Float,
+    val totalFat: Float,
+    val averageFatPerDay: Float,
+    val totalFiber: Float,
+    val totalSodium: Float,
+    val totalWaterMl: Int,
+    val averageWaterMlPerDay: Int,
+    val daysLogged: Int,
+    val targetMetDays: Int
+)
+

@@ -28,11 +28,16 @@ class HealthRepository(private val database: AppDatabase) {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
 
-    // User Profile
+    // User Profile & Measurement Preferences
     val userProfile: Flow<UserProfile?> = healthDao.getUserProfile()
+    val measurementPreferences: Flow<com.example.data.model.UserMeasurementPreferences?> = healthDao.getMeasurementPreferences()
 
     suspend fun saveProfile(profile: UserProfile) {
         healthDao.saveUserProfile(profile)
+    }
+
+    suspend fun saveMeasurementPreferences(preferences: com.example.data.model.UserMeasurementPreferences) {
+        healthDao.saveMeasurementPreferences(preferences)
     }
 
     // Food Database
@@ -44,10 +49,14 @@ class HealthRepository(private val database: AppDatabase) {
 
     suspend fun getFoodByBarcode(barcode: String): FoodItem? = foodDao.getFoodByBarcode(barcode)
 
+    suspend fun getFoodByName(name: String): FoodItem? = foodDao.getFoodByName(name)
+
+    suspend fun getFoodById(id: Long): FoodItem? = foodDao.getFoodById(id)
+
     // Meals
     fun getMealsForDate(date: String): Flow<List<MealEntry>> = mealDao.getMealsForDate(date)
 
-    fun getAllMeals(): Flow<List<MealEntry>> = mealDao.getAllMeals()
+    val allMeals: Flow<List<MealEntry>> = mealDao.getAllMeals()
 
     suspend fun logMeal(meal: MealEntry): Long {
         val id = mealDao.insertMeal(meal)
@@ -65,6 +74,7 @@ class HealthRepository(private val database: AppDatabase) {
 
     // Water
     fun getWaterForDate(date: String): Flow<List<WaterEntry>> = healthDao.getWaterForDate(date)
+    val allWater: Flow<List<WaterEntry>> = healthDao.getAllWaterEntries()
 
     suspend fun addWater(date: String, amountMl: Int): Long {
         val id = healthDao.insertWater(WaterEntry(dateString = date, amountMl = amountMl))
