@@ -1,0 +1,12 @@
+{
+  "name": "nutriglassai-gemini-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Secure Vercel serverless proxy with Gemini model fallback for Nutriglass AI",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --check api/gemini.js"
+  }
+}
