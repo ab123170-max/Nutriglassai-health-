@@ -65,6 +65,7 @@ fun PdfReaderScreen(
     var paragraphs by remember { mutableStateOf<List<String>>(emptyList()) }
     var isTextMode by remember { mutableStateOf(false) }
     var speechRate by remember { mutableFloatStateOf(1.0f) }
+    var continueNarrationAcrossPages by remember { mutableStateOf(false) }
 
     // AI Dialog state
     var showAiSummaryDialog by remember { mutableStateOf(false) }
@@ -78,6 +79,7 @@ fun PdfReaderScreen(
             onParagraphChanged = { _ -> },
             onPageFinished = {
                 if (currentPage < book.pageCount - 1) {
+                    continueNarrationAcrossPages = true
                     currentPage += 1
                 }
             }
@@ -106,6 +108,15 @@ fun PdfReaderScreen(
                 pageText = text
                 paragraphs = paraList
                 viewModel.updateBookProgress(bookId, currentPage, book.pageCount)
+                if (continueNarrationAcrossPages && paraList.isNotEmpty()) {
+                    continueNarrationAcrossPages = false
+                    ttsEngine.startReadingPage(
+                        if (translatedText.isNotBlank()) translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() } else paraList,
+                        0,
+                        speechRate,
+                        selectedLanguage
+                    )
+                }
             }
         }
     }
