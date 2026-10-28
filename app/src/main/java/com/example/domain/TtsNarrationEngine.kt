@@ -64,7 +64,7 @@ class TtsNarrationEngine(
                 if (utteranceId == activeUtteranceId) {
                     _isPlaying.value = false
                     _voiceStatus.value = "This voice could not read the passage."
-                    onError(_voiceStatus.value)
+                    onSpeechError(_voiceStatus.value)
                 }
             }
             override fun onError(utteranceId: String?, errorCode: Int) = onError(utteranceId)
@@ -84,7 +84,7 @@ class TtsNarrationEngine(
         currentParagraphs = paragraphs.map { it.trim() }.filter { it.isNotEmpty() }
         if (currentParagraphs.isEmpty()) {
             _voiceStatus.value = "No readable text found on this page. Scanned PDFs need OCR."
-            onError(_voiceStatus.value)
+            onSpeechError(_voiceStatus.value)
             return
         }
         _currentParagraphIndex.value = startIndex.coerceIn(0, currentParagraphs.lastIndex)
@@ -110,7 +110,7 @@ class TtsNarrationEngine(
         val result = tts?.setLanguage(locale) ?: TextToSpeech.LANG_MISSING_DATA
         if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
             _voiceStatus.value = "No installed voice supports ${locale.displayName}. Install a compatible voice in Android Text-to-Speech settings."
-            onError(_voiceStatus.value)
+            onSpeechError(_voiceStatus.value)
             return false
         }
         _voiceStatus.value = "Reading in ${locale.getDisplayName(locale)}"
@@ -142,7 +142,7 @@ class TtsNarrationEngine(
         if (result == TextToSpeech.ERROR) {
             _isPlaying.value = false
             _voiceStatus.value = "Unable to start speech for this passage."
-            onError(_voiceStatus.value)
+            onSpeechError(_voiceStatus.value)
         } else {
             _isPlaying.value = true
         }
