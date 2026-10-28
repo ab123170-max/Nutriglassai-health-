@@ -59,9 +59,11 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 413, { error: "Image request is too large. Please scan a smaller or clearer photo.", code: "PAYLOAD_TOO_LARGE" });
   }
 
-  let hasImage = false;\n  let hasText = false;
+  let hasImage = false;
+  let hasText = false;
   for (const content of body.contents) {
     for (const part of (content && Array.isArray(content.parts) ? content.parts : [])) {
+      if (part && typeof part.text === "string" && part.text.trim()) hasText = true;
       const inline = part && (part.inline_data || part.inlineData);
       if (inline && typeof (inline.data) === "string") {
         hasImage = true;
@@ -71,8 +73,8 @@ module.exports = async function handler(req, res) {
       }
     }
   }
-  if (!hasImage) {
-    return sendJson(res, 400, { error: "No image data was included.", code: "IMAGE_REQUIRED" });
+  if (!hasImage && !hasText) {
+    return sendJson(res, 400, { error: "Text or image content is required.", code: "CONTENT_REQUIRED" });
   }
 
   let lastStatus = 502;
