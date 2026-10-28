@@ -238,6 +238,49 @@ interface HealthDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveVoiceCoachingPreferences(prefs: com.example.data.model.VoiceCoachingPreferences)
+
+    // Weekly Check-Ins
+    @Query("SELECT * FROM weekly_check_ins ORDER BY checkInDate DESC")
+    fun getAllWeeklyCheckIns(): Flow<List<com.example.data.model.WeeklyCheckInEntity>>
+
+    @Query("SELECT * FROM weekly_check_ins ORDER BY timestamp DESC LIMIT 1")
+    fun getLatestWeeklyCheckIn(): Flow<com.example.data.model.WeeklyCheckInEntity?>
+
+    @Query("SELECT * FROM weekly_check_ins ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLatestWeeklyCheckInDirect(): com.example.data.model.WeeklyCheckInEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWeeklyCheckIn(checkIn: com.example.data.model.WeeklyCheckInEntity): Long
+
+    @Query("DELETE FROM weekly_check_ins WHERE id = :id")
+    suspend fun deleteWeeklyCheckIn(id: Long)
+
+    // Questionnaires
+    @Query("SELECT * FROM check_in_questionnaires WHERE checkInId = :checkInId LIMIT 1")
+    fun getQuestionnaireForCheckIn(checkInId: Long): Flow<com.example.data.model.CheckInQuestionnaireEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertQuestionnaire(questionnaire: com.example.data.model.CheckInQuestionnaireEntity): Long
+
+    // Weekly Plans
+    @Query("SELECT * FROM weekly_plans ORDER BY generatedTimestamp DESC LIMIT 1")
+    fun getLatestWeeklyPlan(): Flow<com.example.data.model.WeeklyPlanEntity?>
+
+    @Query("SELECT * FROM weekly_plans ORDER BY generatedTimestamp DESC")
+    fun getAllWeeklyPlans(): Flow<List<com.example.data.model.WeeklyPlanEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWeeklyPlan(plan: com.example.data.model.WeeklyPlanEntity): Long
+
+    @Update
+    suspend fun updateWeeklyPlan(plan: com.example.data.model.WeeklyPlanEntity)
+
+    // Weekly Check-In Preferences
+    @Query("SELECT * FROM weekly_check_in_preferences WHERE id = 1 LIMIT 1")
+    fun getWeeklyCheckInPreferences(): Flow<com.example.data.model.WeeklyCheckInPreferences?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveWeeklyCheckInPreferences(prefs: com.example.data.model.WeeklyCheckInPreferences)
 }
 
 @Dao

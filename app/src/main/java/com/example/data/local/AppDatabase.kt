@@ -39,9 +39,13 @@ import kotlinx.coroutines.launch
         com.example.data.model.BookmarkEntity::class,
         com.example.data.model.ReadingSessionRecord::class,
         com.example.data.model.AudioItemEntity::class,
-        com.example.data.model.VoiceCoachingPreferences::class
+        com.example.data.model.VoiceCoachingPreferences::class,
+        com.example.data.model.WeeklyCheckInEntity::class,
+        com.example.data.model.CheckInQuestionnaireEntity::class,
+        com.example.data.model.WeeklyPlanEntity::class,
+        com.example.data.model.WeeklyCheckInPreferences::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

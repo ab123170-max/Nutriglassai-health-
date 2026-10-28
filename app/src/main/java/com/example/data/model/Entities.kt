@@ -353,5 +353,65 @@ data class VoiceCoachingPreferences(
     val languageCode: String = "en"
 )
 
+@Entity(tableName = "weekly_check_ins")
+data class WeeklyCheckInEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val checkInDate: String, // YYYY-MM-DD
+    val currentWeightKg: Float,
+    val previousWeightKg: Float? = null,
+    val startingWeightKg: Float = 70f,
+    val targetWeightKg: Float = 65f,
+    val weightChangeWeeklyKg: Float = 0f,
+    val weightChangeTotalKg: Float = 0f,
+    val displayUnit: String = "kg", // "kg" or "lb"
+    val progressStatus: String = "PROGRESSING", // "PROGRESSING", "UNCHANGED", "INCREASED", "MISSED"
+    val isSnoozedOrSkipped: Boolean = false,
+    val aiMotivationMessage: String = "",
+    val notes: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "check_in_questionnaires")
+data class CheckInQuestionnaireEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val checkInId: Long,
+    val dateString: String,
+    val followedMealPlanDays: Int = 5,
+    val exerciseSessionsCompleted: Int = 3,
+    val walkingGoalDaysAchieved: Int = 4,
+    val sleepQualityRating: String = "Good", // "Good", "Fair", "Poor"
+    val difficultiesFacing: String = "None",
+    val dietAffordableAndEasy: Boolean = true,
+    val biggestChallenge: String = "",
+    val nextWeekImprovementGoal: String = "",
+    val language: String = "English",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "weekly_plans")
+data class WeeklyPlanEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val checkInId: Long = 0,
+    val weekStartDate: String, // YYYY-MM-DD
+    val generatedTimestamp: Long = System.currentTimeMillis(),
+    val summaryReasoning: String = "",
+    val proposedAdjustmentsJson: String = "[]", // JSON array of adjustments
+    val updated7DayMealPlanJson: String = "{}", // JSON day-by-day guidance
+    val updated7DayActivityPlanJson: String = "{}",
+    val affordableFoodAlternatives: String = "",
+    val isAccepted: Boolean = true
+)
+
+@Entity(tableName = "weekly_check_in_preferences")
+data class WeeklyCheckInPreferences(
+    @PrimaryKey val id: Int = 1,
+    val preferredDay: String = "Sunday", // "Saturday" or "Sunday"
+    val reminderTimeHour: Int = 8,
+    val reminderTimeMinute: Int = 0,
+    val remindersEnabled: Boolean = true,
+    val lastCheckInReminderTimestamp: Long = 0L,
+    val missedReminderSent: Boolean = false
+)
+
 
 

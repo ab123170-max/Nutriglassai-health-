@@ -324,6 +324,42 @@ class HealthRepository(private val database: AppDatabase) {
     suspend fun saveVoiceCoachingPreferences(prefs: com.example.data.model.VoiceCoachingPreferences) {
         healthDao.saveVoiceCoachingPreferences(prefs)
     }
+
+    // Weekly Check-Ins
+    val allWeeklyCheckIns: Flow<List<com.example.data.model.WeeklyCheckInEntity>> = healthDao.getAllWeeklyCheckIns()
+    val latestWeeklyCheckIn: Flow<com.example.data.model.WeeklyCheckInEntity?> = healthDao.getLatestWeeklyCheckIn()
+
+    suspend fun getLatestWeeklyCheckInDirect(): com.example.data.model.WeeklyCheckInEntity? = healthDao.getLatestWeeklyCheckInDirect()
+
+    suspend fun insertWeeklyCheckIn(checkIn: com.example.data.model.WeeklyCheckInEntity): Long {
+        val id = healthDao.insertWeeklyCheckIn(checkIn)
+        achievementDao.unlock("weekly_check_in_first")
+        return id
+    }
+
+    suspend fun deleteWeeklyCheckIn(id: Long) = healthDao.deleteWeeklyCheckIn(id)
+
+    // Questionnaires
+    fun getQuestionnaireForCheckIn(checkInId: Long): Flow<com.example.data.model.CheckInQuestionnaireEntity?> =
+        healthDao.getQuestionnaireForCheckIn(checkInId)
+
+    suspend fun insertQuestionnaire(questionnaire: com.example.data.model.CheckInQuestionnaireEntity): Long =
+        healthDao.insertQuestionnaire(questionnaire)
+
+    // Weekly Plans
+    val latestWeeklyPlan: Flow<com.example.data.model.WeeklyPlanEntity?> = healthDao.getLatestWeeklyPlan()
+    val allWeeklyPlans: Flow<List<com.example.data.model.WeeklyPlanEntity>> = healthDao.getAllWeeklyPlans()
+
+    suspend fun insertWeeklyPlan(plan: com.example.data.model.WeeklyPlanEntity): Long = healthDao.insertWeeklyPlan(plan)
+
+    suspend fun updateWeeklyPlan(plan: com.example.data.model.WeeklyPlanEntity) = healthDao.updateWeeklyPlan(plan)
+
+    // Weekly Check-In Preferences
+    val weeklyCheckInPreferences: Flow<com.example.data.model.WeeklyCheckInPreferences?> = healthDao.getWeeklyCheckInPreferences()
+
+    suspend fun saveWeeklyCheckInPreferences(prefs: com.example.data.model.WeeklyCheckInPreferences) {
+        healthDao.saveWeeklyCheckInPreferences(prefs)
+    }
 }
 
 

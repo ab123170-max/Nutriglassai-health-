@@ -172,6 +172,20 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MonthlyGoalTarget(monthKey = "2026-10"))
 
+    val allWeeklyCheckIns: StateFlow<List<com.example.data.model.WeeklyCheckInEntity>> = repository.allWeeklyCheckIns
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val latestWeeklyCheckIn: StateFlow<com.example.data.model.WeeklyCheckInEntity?> = repository.latestWeeklyCheckIn
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val latestWeeklyPlan: StateFlow<com.example.data.model.WeeklyPlanEntity?> = repository.latestWeeklyPlan
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val weeklyCheckInPreferences: StateFlow<com.example.data.model.WeeklyCheckInPreferences> = repository.weeklyCheckInPreferences
+        .flatMapLatest { prefs ->
+            MutableStateFlow(prefs ?: com.example.data.model.WeeklyCheckInPreferences())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.example.data.model.WeeklyCheckInPreferences())
+
     val monthlyReportSummary: StateFlow<MonthlyReportSummary> = combine(
         combine(_selectedMonthKey, currentMonthlyGoalTarget) { monthKey, target -> monthKey to target },
         combine(allMeals, allWorkouts) { meals, workouts -> meals to workouts },
@@ -1082,5 +1096,119 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
             put("steps", stepRecord.value?.steps ?: 0)
         })
         return root.toString(2)
+    }
+
+    fun recordWeeklyCheckIn(
+        weightKg: Float,
+        checkInDate: String,
+        notes: String = "",
+        questionnaire: com.example.data.model.CheckInQuestionnaireEntity? = null
+    ) {
+        viewModelScope.launch {
+            val profile = userProfile.value
+            val prevCheckIn = repository.getLatestWeeklyCheckInDirect()
+            val previousWeight = prevCheckIn?.currentWeightKg ?: profile.weightKg
+            val startingWeight = if (prevCheckIn != null && prevCheckIn.startingWeightKg > 0) prevCheckIn.startingWeightKg else profile.weightKg
+            val targetWeight = profile.targetWeightKg
+
+            val weeklyChange = weightKg - previousWeight
+            val totalChange = weightKg - startingWeight
+
+            val status = when {
+                weeklyChange <= -0.1f -> "PROGRESSING"
+                weeklyChange in -0.1f..0.1f -> "UNCHANGED"
+                else -> "INCREASED"
+            }
+
+            // Save in weight history
+            repository.logWeight(com.example.data.model.WeightRecord(dateString = checkInDate, weightKg = weightKg, notes = "Weekly Check-In ($status)"))
+
+            val checkInEntity = com.example.data.model.WeeklyCheckInEntity(
+                checkInDate = checkInDate,
+                currentWeightKg = weightKg,
+                previousWeightKg = previousWeight,
+                startingWeightKg = startingWeight,
+                targetWeightKg = targetWeight,
+                weightChangeWeeklyKg = weeklyChange,
+                weightChangeTotalKg = totalChange,
+                displayUnit = measurementPreferences.value.weightUnit,
+                progressStatus = status,
+                notes = notes
+            )
+
+            val checkInId = repository.insertWeeklyCheckIn(checkInEntity)
+
+            var savedQuestionnaire: com.example.data.model.CheckInQuestionnaireEntity? = null
+            if (questionnaire != null) {
+                val qEntity = questionnaire.copy(checkInId = checkInId, dateString = checkInDate)
+                repository.insertQuestionnaire(qEntity)
+                savedQuestionnaire = qEntity
+            }
+
+            val generated = com.example.domain.WeeklyAiCoachEngine.generateWeeklyMotivationAndPlan(
+                checkIn = checkInEntity.copy(id = checkInId),
+                questionnaire = savedQuestionnaire,
+                userProfile = profile,
+                unit = measurementPreferences.value.weightUnit
+            )
+
+            val adjJson = org.json.JSONArray().apply {
+                generated.proposedAdjustments.forEach { adj ->
+                    put(org.json.JSONObject().apply {
+                        put("id", adj.id)
+                        put("title", adj.title)
+                        put("description", adj.description)
+                        put("category", adj.category)
+                        put("isAccepted", adj.isAccepted)
+                    })
+                }
+            }.toString()
+
+            val planEntity = com.example.data.model.WeeklyPlanEntity(
+                checkInId = checkInId,
+                weekStartDate = checkInDate,
+                summaryReasoning = generated.obstaclesAnalysis,
+                proposedAdjustmentsJson = adjJson,
+                updated7DayMealPlanJson = generated.mealPlan7Days,
+                updated7DayActivityPlanJson = generated.activityPlan7Days,
+                affordableFoodAlternatives = generated.affordableFoodAlternatives,
+                isAccepted = true
+            )
+
+            repository.insertWeeklyPlan(planEntity)
+            repository.insertWeeklyCheckIn(checkInEntity.copy(id = checkInId, aiMotivationMessage = generated.motivationMessage))
+        }
+    }
+
+    fun toggleAdjustmentAcceptance(adjustmentId: String, accept: Boolean) {
+        viewModelScope.launch {
+            val currentPlan = latestWeeklyPlan.value ?: return@launch
+            val rawJson = currentPlan.proposedAdjustmentsJson
+            try {
+                val jsonArr = org.json.JSONArray(rawJson)
+                for (i in 0 until jsonArr.length()) {
+                    val obj = jsonArr.getJSONObject(i)
+                    if (obj.optString("id") == adjustmentId) {
+                        obj.put("isAccepted", accept)
+                    }
+                }
+                val updatedPlan = currentPlan.copy(proposedAdjustmentsJson = jsonArr.toString())
+                repository.updateWeeklyPlan(updatedPlan)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun saveWeeklyCheckInPreferences(prefs: com.example.data.model.WeeklyCheckInPreferences) {
+        viewModelScope.launch {
+            repository.saveWeeklyCheckInPreferences(prefs)
+        }
+    }
+
+    fun deleteWeeklyCheckIn(id: Long) {
+        viewModelScope.launch {
+            repository.deleteWeeklyCheckIn(id)
+        }
     }
 }

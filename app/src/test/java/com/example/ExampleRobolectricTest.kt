@@ -325,5 +325,74 @@ class ExampleRobolectricTest {
     assertTrue(jsonBackup.contains("NutriGlass AI"))
     assertTrue(jsonBackup.contains("Dal Bhat"))
   }
+
+  // --- Tests for Weekly Check-In & AI Goal Coaching ---
+  @Test
+  fun testWeeklyCheckInWeightConversionAndProgressClassification() {
+    val checkInProgressing = com.example.data.model.WeeklyCheckInEntity(
+      checkInDate = "2026-10-25",
+      currentWeightKg = 68.0f,
+      previousWeightKg = 68.8f,
+      startingWeightKg = 72.0f,
+      targetWeightKg = 65.0f,
+      weightChangeWeeklyKg = -0.8f,
+      weightChangeTotalKg = -4.0f,
+      progressStatus = "PROGRESSING"
+    )
+
+    assertEquals("PROGRESSING", checkInProgressing.progressStatus)
+    assertEquals(-0.8f, checkInProgressing.weightChangeWeeklyKg, 0.01f)
+
+    // Unit Conversion Test
+    val lbVal = checkInProgressing.currentWeightKg * 2.20462f
+    assertEquals(149.91f, lbVal, 0.5f)
+  }
+
+  @Test
+  fun testCheckInReminderNextWeekendTimestampCalculation() {
+    val saturdayMillis = com.example.domain.CheckInReminderManager.calculateNextCheckInMillis("Saturday", 8, 0)
+    val sundayMillis = com.example.domain.CheckInReminderManager.calculateNextCheckInMillis("Sunday", 9, 30)
+
+    assertTrue(saturdayMillis > System.currentTimeMillis())
+    assertTrue(sundayMillis > System.currentTimeMillis())
+  }
+
+  @Test
+  fun testWeeklyAiCoachEngineFallbackPlanGeneration() {
+    val profile = com.example.data.model.UserProfile(
+      fitnessGoal = "Lose Weight",
+      weightKg = 70f,
+      targetWeightKg = 65f
+    )
+    val checkIn = com.example.data.model.WeeklyCheckInEntity(
+      checkInDate = "2026-10-25",
+      currentWeightKg = 69.5f,
+      previousWeightKg = 70.0f,
+      startingWeightKg = 72.0f,
+      targetWeightKg = 65.0f,
+      weightChangeWeeklyKg = -0.5f,
+      weightChangeTotalKg = -2.5f,
+      progressStatus = "PROGRESSING"
+    )
+    val questionnaire = com.example.data.model.CheckInQuestionnaireEntity(
+      checkInId = 1L,
+      dateString = "2026-10-25",
+      followedMealPlanDays = 6,
+      exerciseSessionsCompleted = 4,
+      walkingGoalDaysAchieved = 5,
+      sleepQualityRating = "Good"
+    )
+
+    val plan = com.example.domain.WeeklyAiCoachEngine.generateWeeklyMotivationAndPlan(
+      checkIn = checkIn,
+      questionnaire = questionnaire,
+      userProfile = profile,
+      unit = "kg"
+    )
+
+    assertTrue(plan.motivationMessage.contains("69.5"))
+    assertTrue(plan.proposedAdjustments.isNotEmpty())
+    assertTrue(plan.affordableFoodAlternatives.contains("Lentils"))
+  }
 }
 

@@ -57,6 +57,8 @@ import com.example.ui.viewmodel.HealthViewModel
 import com.example.ui.screens.MonthlyReportScreen
 import com.example.ui.screens.WalkAndListenScreen
 import com.example.ui.screens.PdfReaderScreen
+import com.example.ui.screens.WeeklyCheckInScreen
+import com.example.ui.screens.WeeklyProgressDashboardScreen
 import androidx.compose.material.icons.filled.AutoStories
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -71,6 +73,8 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object MonthlyReport : Screen("monthly_report", "Monthly Report", Icons.Default.Assessment)
     object WalkAndLearn : Screen("walk_and_learn", "Walk & Learn", Icons.Default.AutoStories)
     object PdfReader : Screen("pdf_reader", "PDF Reader", Icons.Default.AutoStories)
+    object WeeklyCheckIn : Screen("weekly_check_in", "Weekend Check-In", Icons.Default.Assessment)
+    object WeeklyProgressDashboard : Screen("weekly_progress", "Weekly Progress", Icons.Default.Assessment)
 }
 
 class MainActivity : ComponentActivity() {
@@ -195,7 +199,9 @@ fun NutriGlassApp(
                     viewModel = viewModel,
                     onNavigateToMeasurementUnits = { currentScreen = Screen.MeasurementUnits },
                     onNavigateToMonthlyReport = { currentScreen = Screen.MonthlyReport },
-                    onNavigateToWalkAndLearn = { currentScreen = Screen.WalkAndLearn }
+                    onNavigateToWalkAndLearn = { currentScreen = Screen.WalkAndLearn },
+                    onNavigateToWeeklyCheckIn = { currentScreen = Screen.WeeklyCheckIn },
+                    onNavigateToWeeklyProgress = { currentScreen = Screen.WeeklyProgressDashboard }
                 )
                 Screen.MeasurementUnits -> MeasurementUnitsScreen(
                     viewModel = viewModel,
@@ -221,6 +227,15 @@ fun NutriGlassApp(
                         onNavigateBack = { currentScreen = Screen.WalkAndLearn }
                     )
                 }
+                Screen.WeeklyCheckIn -> WeeklyCheckInScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = Screen.Home }
+                )
+                Screen.WeeklyProgressDashboard -> WeeklyProgressDashboardScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = Screen.Home },
+                    onNavigateToCheckIn = { currentScreen = Screen.WeeklyCheckIn }
+                )
             }
         }
     }

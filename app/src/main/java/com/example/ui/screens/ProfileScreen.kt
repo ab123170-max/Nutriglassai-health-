@@ -30,8 +30,10 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -79,6 +81,8 @@ fun ProfileScreen(
     onNavigateToMeasurementUnits: () -> Unit,
     onNavigateToMonthlyReport: () -> Unit = {},
     onNavigateToWalkAndLearn: () -> Unit = {},
+    onNavigateToWeeklyCheckIn: () -> Unit = {},
+    onNavigateToWeeklyProgress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -226,6 +230,45 @@ fun ProfileScreen(
                         Text("Customize Measurement Units")
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        // Weekend Weight Check-In & AI Motivation Card
+        item {
+            SamsungHealthCard(
+                title = "Weekend Check-In & AI Goal Coaching",
+                icon = Icons.Default.Assessment,
+                iconTint = HealthTeal,
+                headerActionText = "Dashboard",
+                onHeaderActionClick = onNavigateToWeeklyProgress
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("Weekend Reminder Schedule", "Sat/Sun")
+                    GoalRow("7-Day AI Plan Adjustments", "Interactive")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onNavigateToWeeklyCheckIn,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Log Check-In")
+                        }
+                        Button(
+                            onClick = onNavigateToWeeklyProgress,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = HealthNavy)
+                        ) {
+                            Text("Dashboard")
+                        }
                     }
                 }
             }
