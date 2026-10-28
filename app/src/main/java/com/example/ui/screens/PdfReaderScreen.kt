@@ -174,9 +174,13 @@ fun PdfReaderScreen(
                         showAiSummaryDialog = true
                         isAiLoading = true
                         coroutineScope.launch {
-                            // Call Gemini AI summary
-                            aiSummaryText = "AI Summary for Page ${currentPage + 1}:\n\nKey Concepts:\n• Comprehensive overview of section topics.\n• Key definitions and core principles summarized for quick walking listening.\n• Actionable learning takeaways."
-                            isAiLoading = false
+                            try {
+                                aiSummaryText = BookAiService.summarize(pageText, languageName(selectedLanguage))
+                            } catch (e: Exception) {
+                                aiSummaryText = e.message ?: "AI summary failed. Please retry."
+                            } finally {
+                                isAiLoading = false
+                            }
                         }
                     }) {
                         Icon(Icons.Default.Psychology, contentDescription = "AI Summary", tint = HealthTeal)
