@@ -650,10 +650,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             try {
-                // If in ON_DEVICE_ONLY mode or Gemini is not configured, execute on-device vision directly
-                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.ON_DEVICE_ONLY ||
-                    !com.example.data.network.GeminiConfig.isConfigured()
-                ) {
+                // Only force offline vision when the user explicitly selected offline mode.
+                // Cloud scanning uses the secured Vercel proxy, so no Gemini key is needed in the APK.
+                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.ON_DEVICE_ONLY) {
                     runOnDeviceScan(bitmap, imageUri)
                     return@launch
                 }
@@ -705,20 +704,13 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
                 _scanError.value = "Scanning cancelled."
                 _scanErrorType.value = null
             } catch (e: com.example.data.network.GeminiAnalysisException) {
-                // If Auto Hybrid is enabled, seamlessly fall back to on-device neural food vision!
-                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID) {
-                    runOnDeviceScan(bitmap, imageUri)
-                } else {
-                    _scanError.value = e.message
-                    _scanErrorType.value = e.errorType
-                }
+                // Never replace a failed cloud result with the current heuristic offline classifier,
+                // which cannot genuinely identify image contents and may falsely label every photo.
+                _scanError.value = e.message
+                _scanErrorType.value = e.errorType
             } catch (e: Exception) {
-                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID) {
-                    runOnDeviceScan(bitmap, imageUri)
-                } else {
-                    _scanError.value = "AI could not analyze this photo: ${e.localizedMessage ?: "Unknown error"}. Check server API key and model."
-                    _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
-                }
+                _scanError.value = "AI could not identify this photo reliably: ${e.localizedMessage ?: "Unknown error"}. Please retry or enter the food manually."
+                _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
             } finally {
                 _isScanAnalyzing.value = false
             }

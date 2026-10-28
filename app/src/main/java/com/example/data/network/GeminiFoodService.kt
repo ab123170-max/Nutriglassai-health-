@@ -65,8 +65,7 @@ object GeminiFoodService {
         bitmap: Bitmap,
         imageUriString: String?
     ): MultiFoodScanResult = withContext(Dispatchers.IO) {
-        val apiKey = getApiKey()
-
+        // Send images through the secured Vercel proxy; never require or embed a Gemini key in the APK.
         // Fast client-side image compression & hashing
         val compressedBytes = compressBitmap(bitmap)
         val imageHash = computeHash(compressedBytes)
@@ -76,33 +75,23 @@ object GeminiFoodService {
             return@withContext cachedResult.copy(imageUri = imageUriString)
         }
 
-        // Validate API Key before network request
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            throw GeminiAnalysisException(
-                message = "Gemini API key is not configured. Please add your GEMINI_API_KEY in the AI Studio Secrets panel, or use the offline Nepali food profile.",
-                errorType = GeminiErrorType.API_KEY_MISSING
-            )
-        }
-
         val base64Image = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
         val prompt = buildAnalysisPrompt()
 
-        // Attempt first with primary model, then with fallback model if 404/unsupported
-        val candidateModels = listOf(GeminiConfig.activeModel, GeminiConfig.FALLBACK_MODEL).distinct()
+        // The server proxy performs model fallback centrally using models verified on the server.
+        val candidateModels = listOf("server-proxy")
         var lastException: GeminiAnalysisException? = null
 
         for (model in candidateModels) {
             try {
                 val result = executeGenerateContent(
                     model = model,
-                    apiKey = apiKey,
                     prompt = prompt,
                     base64Image = base64Image,
                     imageUriString = imageUriString
                 )
                 // Cache successful result
                 scanResultCache.put(imageHash, result)
-                GeminiConfig.activeModel = model
                 return@withContext result
             } catch (e: GeminiAnalysisException) {
                 lastException = e
@@ -129,7 +118,6 @@ object GeminiFoodService {
 
     private fun executeGenerateContent(
         model: String,
-        apiKey: String,
         prompt: String,
         base64Image: String,
         imageUriString: String?
@@ -161,11 +149,12 @@ object GeminiFoodService {
         }
 
         val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
-        val url = GeminiConfig.getGenerateContentUrl(model, apiKey)
+        val url = "https://nutriglass-seven.vercel.app/api/gemini"
 
         val request = Request.Builder()
             .url(url)
             .post(requestBody)
+            .header("Accept", "application/json")
             .build()
 
         val response = try {
@@ -386,36 +375,46 @@ object GeminiFoodService {
 
     private fun buildAnalysisPrompt(): String {
         return """
-            You are a professional nutrition vision AI specializing in multi-food meal identification, South Asian / Nepali dishes, and global foods.
-            Identify all distinct food items present in this photo (e.g. separate rice, dal, chicken curry, sauteed vegetables, roti, salad).
-            
-            Return ONLY a valid JSON object matching this exact schema:
+            You are a careful visual food-identification and nutrition assistant. Your FIRST task is to identify what is actually visible in the submitted image, not to guess a typical meal.
+
+            CRITICAL IMAGE-GROUNDING RULES:
+            - Inspect the actual pixels in this photo. Never assume the user photographed a Nepali meal.
+            - Do not use example dishes, prior scans, user location, or common meals as evidence.
+            - If the image shows a cup/glass of tea or chai, identify the beverage as tea/masala tea/milk tea only when visually supported. Do not return dal bhat, rice, curry, vegetables, or a full meal unless those items are visibly present.
+            - If only one food or drink is visible, return exactly one item. Do not invent other dishes or ingredients.
+            - Distinguish beverages from solid foods. Estimate a cup volume for drinks; do not assign a plate or thali.
+            - If the photo is unclear, obstructed, or does not visibly contain food/drink, say so in uncertainty_notes and use low confidence. Do not fabricate a confident answer.
+            - Do not copy any sample values into your answer. Estimate nutrition only after identifying the visible item.
+            - Treat each scan independently; never reuse a previous scan's result.
+            - Confidence must reflect visual evidence, not a default constant.
+
+            Return ONLY a valid JSON object using this schema and real values inferred from this photo:
             {
-              "meal_title": "Descriptive meal name (e.g. Nepali Dal Bhat Thali with Chicken Curry)",
-              "uncertainty_notes": "Clear explanation of visual estimation assumptions (e.g. Hidden butter/oil in dal estimated at 1 tsp, portion estimated visually from bowl size).",
-              "disclaimer": "Nutritional values are AI-estimated approximations and should not replace clinical medical advice. Please confirm portion sizes before logging.",
+              "meal_title": "Short name of only the food/drink visibly present",
+              "uncertainty_notes": "What is uncertain from this image",
+              "disclaimer": "Nutrition is an estimate and may vary with recipe and portion.",
               "items": [
                 {
-                  "food_name": "Food item in English (e.g. Steamed Basmati Rice)",
-                  "nepali_name": "Devanagari or romanized Nepali name if applicable (e.g. उसिनेको भात)",
-                  "preparation_method": "Cooking style (e.g. Steamed, Pan-fried, Deep-fried, Boiled, Curried, Raw)",
+                  "food_name": "Identified visible food or drink in English",
+                  "nepali_name": "Nepali name if known, otherwise empty string",
+                  "preparation_method": "Visible/likely preparation, or unknown",
                   "serving_size": 1.0,
-                  "serving_unit": "Standard unit: g, bowl, plate, cup, katori, roti, piece, tbsp, glass, serving",
-                  "estimated_weight_grams": 160.0,
-                  "calories": 208,
-                  "protein_grams": 4.4,
-                  "carbohydrates_grams": 45.0,
-                  "fat_grams": 0.5,
-                  "fiber_grams": 1.0,
-                  "sugar_grams": 0.1,
-                  "sodium_milligrams": 2.0,
-                  "confidence": 0.92,
-                  "uncertainty_notes": "Visually estimated portion based on container aspect ratio.",
-                  "ingredients": ["Basmati rice", "Water"],
-                  "likely_oils_or_sauces": "None / Mustard oil / Ghee",
-                  "allergens": ["Gluten", "Dairy", "Nuts", "Soy", "Mustard", "Egg", "Fish"],
-                  "healthier_alternatives": ["Brown Rice", "Quinoa", "Cauliflower Rice"],
-                  "requires_portion_confirmation": false
+                  "serving_unit": "cup, glass, bowl, piece, plate, or g as appropriate",
+                  "estimated_weight_grams": 200.0,
+                  "calories": 80,
+                  "protein_grams": 2.0,
+                  "carbohydrates_grams": 10.0,
+                  "fat_grams": 3.0,
+                  "fiber_grams": 0.0,
+                  "sugar_grams": 8.0,
+                  "sodium_milligrams": 40.0,
+                  "confidence": 0.70,
+                  "uncertainty_notes": "Visual identification and portion uncertainty",
+                  "ingredients": [],
+                  "likely_oils_or_sauces": "Unknown or none visible",
+                  "allergens": [],
+                  "healthier_alternatives": [],
+                  "requires_portion_confirmation": true
                 }
               ]
             }

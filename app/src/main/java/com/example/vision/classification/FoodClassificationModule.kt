@@ -99,25 +99,19 @@ class HybridFoodClassifier : FoodClassificationEngine {
         topK: Int,
         hintCategory: String?
     ): ClassificationOutput = withContext(Dispatchers.Default) {
-        // Prioritize items based on visual match or matching hints
-        val matches = if (!hintCategory.isNullOrBlank()) {
-            taxonomy.sortedByDescending { if (it.category.contains(hintCategory, ignoreCase = true)) 1f else 0f }
-        } else {
-            taxonomy
-        }
-
-        val topPredictions = matches.take(topK.coerceAtLeast(1))
-        val top = topPredictions.firstOrNull()
-
+        // The current project does not load or execute a trained image-classification model here.
+        // Returning the first taxonomy entry previously mislabeled unrelated photos as Dal Bhat.
+        // Fail honestly until a real TFLite/LiteRT classifier is installed.
         ClassificationOutput(
-            predictions = topPredictions,
-            topPrediction = top,
-            isConfident = (top?.confidence ?: 0f) >= 0.75f,
+            predictions = emptyList(),
+            topPrediction = null,
+            isConfident = false,
             metadata = ClassificationMetadata(
                 classesSupportedCount = taxonomy.size,
-                topKRequested = topK
+                topKRequested = topK,
+                modelName = "No trained on-device classifier loaded"
             ),
-            unsupportedClassDetected = false
+            unsupportedClassDetected = true
         )
     }
 

@@ -2,7 +2,7 @@ name: Build Nutriglass AI APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'fix/food-scan-misclassification']
   workflow_dispatch:
 
 permissions:

@@ -131,6 +131,13 @@ class StandardFoodVisionPipeline(
                     topK = 5
                 )
                 val topPred = classificationOutput.topPrediction
+                if (!classificationOutput.isConfident || topPred == null) {
+                    return@withContext VisionProcessingResult.Error(
+                        message = "The offline food-recognition model is not available. Connect to the internet and retry AI scanning, or enter the food name manually. No guessed food result was saved.",
+                        errorType = VisionErrorType.INFERENCE_FAILED,
+                        failedStage = VisionProcessingStage.CLASSIFICATION
+                    )
+                }
 
                 val classId = topPred?.classId ?: "generic_food"
                 val englishName = topPred?.displayName ?: "Mixed Food"
