@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.BookAiService
+import com.example.domain.GeminiVoiceArtistService
 import com.example.domain.PdfEngine
 import com.example.domain.TtsNarrationEngine
 import com.example.ui.theme.CalorieGreen
@@ -66,6 +68,17 @@ fun PdfReaderScreen(
     var isTextMode by remember { mutableStateOf(false) }
     var speechRate by remember { mutableFloatStateOf(1.0f) }
     var continueNarrationAcrossPages by remember { mutableStateOf(false) }
+    var isAiVoiceLoading by remember { mutableStateOf(false) }
+    var isAiVoicePlaying by remember { mutableStateOf(false) }
+    var aiVoicePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var aiVoiceError by remember { mutableStateOf<String?>(null) }
+    var voiceStyleIndex by remember { mutableIntStateOf(0) }
+    val voiceStyles = listOf(
+        "warm, natural audiobook narrator; clear pronunciation and expressive pauses",
+        "calm bedtime storyteller; gentle pace and soft warmth",
+        "dramatic storyteller; emotionally expressive but never exaggerated",
+        "clear educational narrator; confident, measured and easy to understand"
+    )
 
     // AI Dialog state
     var showAiSummaryDialog by remember { mutableStateOf(false) }
@@ -92,11 +105,15 @@ fun PdfReaderScreen(
     DisposableEffect(Unit) {
         onDispose {
             ttsEngine.shutdown()
+            aiVoicePlayer?.release()
+            aiVoicePlayer = null
         }
     }
 
     // Render page bitmap and extract text whenever currentPage changes
     LaunchedEffect(currentPage, book.uriString) {
+        translatedText = ""
+        translationError = null
         withContext(Dispatchers.IO) {
             val uri = Uri.parse(book.uriString)
             val bmp = PdfEngine.renderPageBitmap(context, uri, currentPage)
@@ -237,6 +254,96 @@ fun PdfReaderScreen(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            if (isAiVoicePlaying) {
+                                aiVoicePlayer?.pause()
+                                isAiVoicePlaying = false
+                            } else if (aiVoicePlayer != null) {
+                                try {
+                                    aiVoicePlayer?.start()
+                                    isAiVoicePlaying = true
+                                } catch (e: Exception) {
+                                    aiVoiceError = "Could not resume AI narration. Please generate it again."
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    isAiVoiceLoading = true
+                                    aiVoiceError = null
+                                    try {
+                                        ttsEngine.pause()
+                                        if (pageText.isBlank() || pageText.startsWith("Page ${currentPage + 1}.")) {
+                                            throw IllegalStateException("No real PDF text was extracted. Scanned PDFs need OCR before narration.")
+                                        }
+                                        if (translatedText.isBlank()) {
+                                            translatedText = BookAiService.translate(pageText, languageName(selectedLanguage))
+                                        }
+                                        val audioFile = GeminiVoiceArtistService.generateWav(
+                                            context = context,
+                                            text = translatedText,
+                                            style = voiceStyles[voiceStyleIndex],
+                                            voice = "Kore"
+                                        )
+                                        val player = MediaPlayer()
+                                        player.setDataSource(audioFile.absolutePath)
+                                        player.setOnPreparedListener { mp ->
+                                            mp.start()
+                                            isAiVoicePlaying = true
+                                            isAiVoiceLoading = false
+                                        }
+                                        player.setOnCompletionListener { mp ->
+                                            isAiVoicePlaying = false
+                                            mp.release()
+                                            if (aiVoicePlayer === mp) aiVoicePlayer = null
+                                        }
+                                        player.setOnErrorListener { mp, _, _ ->
+                                            isAiVoicePlaying = false
+                                            isAiVoiceLoading = false
+                                            aiVoiceError = "AI audio playback failed. Please try again."
+                                            mp.release()
+                                            if (aiVoicePlayer === mp) aiVoicePlayer = null
+                                            true
+                                        }
+                                        aiVoicePlayer = player
+                                        player.prepareAsync()
+                                    } catch (e: Exception) {
+                                        isAiVoiceLoading = false
+                                        aiVoiceError = e.message ?: "AI voice generation failed. Please retry."
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isAiVoiceLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = HealthNavy)
+                    ) {
+                        if (isAiVoiceLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Creating professional AI narration…")
+                        } else {
+                            Icon(if (isAiVoicePlaying) Icons.Default.Pause else Icons.Default.AutoAwesome, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isAiVoicePlaying) "Pause AI Voice Artist" else "Listen with AI Voice Artist")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Narration style", fontSize = 12.sp)
+                        TextButton(onClick = {
+                            voiceStyleIndex = (voiceStyleIndex + 1) % voiceStyles.size
+                            aiVoicePlayer?.release()
+                            aiVoicePlayer = null
+                            isAiVoicePlaying = false
+                        }) {
+                            Text(listOf("Warm narrator", "Bedtime storyteller", "Dramatic storyteller", "Educational narrator")[voiceStyleIndex])
+                        }
+                    }
+                    aiVoiceError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
 
                     // Audio Playback Controls
                     Row(
