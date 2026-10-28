@@ -14,7 +14,7 @@ class TtsNarrationEngine(
     context: Context,
     private val onParagraphChanged: (Int) -> Unit = {},
     private val onPageFinished: () -> Unit = {},
-    private val onError: (String) -> Unit = {}
+    private val onSpeechError: (String) -> Unit = {}
 ) : TextToSpeech.OnInitListener {
 
     private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
@@ -38,7 +38,7 @@ class TtsNarrationEngine(
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) {
             _voiceStatus.value = "Speech engine initialization failed."
-            onError(_voiceStatus.value)
+            onSpeechError(_voiceStatus.value)
             return
         }
         isInitialized = true
