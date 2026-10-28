@@ -89,6 +89,9 @@ fun ProfileScreen(
     var editName by remember { mutableStateOf(userProfile.name) }
     var editAge by remember { mutableStateOf(userProfile.age.toString()) }
     var editHeight by remember { mutableStateOf(userProfile.heightCm.toInt().toString()) }
+    var editHeightUnit by remember { mutableStateOf("cm") }
+    var editHeightFeet by remember { mutableStateOf("5") }
+    var editHeightInches by remember { mutableStateOf("1") }
     var editWeight by remember { mutableStateOf(userProfile.weightKg.toInt().toString()) }
     var editTargetWeight by remember { mutableStateOf(userProfile.targetWeightKg.toInt().toString()) }
     var editGoal by remember { mutableStateOf(userProfile.fitnessGoal) }
@@ -170,6 +173,10 @@ fun ProfileScreen(
                                 editName = userProfile.name
                                 editAge = userProfile.age.toString()
                                 editHeight = userProfile.heightCm.toInt().toString()
+                                val (feet, inches) = UnitConversionEngine.cmToFtIn(userProfile.heightCm)
+                                editHeightFeet = feet.toString()
+                                editHeightInches = inches.toString()
+                                editHeightUnit = if (measurementPrefs.heightUnit == "ft_in" || measurementPrefs.heightUnit == "in") "ft_in" else "cm"
                                 editWeight = userProfile.weightKg.toInt().toString()
                                 editTargetWeight = userProfile.targetWeightKg.toInt().toString()
                                 editGoal = userProfile.fitnessGoal
@@ -388,11 +395,57 @@ fun ProfileScreen(
                                 label = { Text("Age") },
                                 modifier = Modifier.weight(1f)
                             )
+                            Column(modifier = Modifier.weight(1.25f)) {
+                                Text("Height unit", style = MaterialTheme.typography.labelSmall)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    FilterChip(
+                                        selected = editHeightUnit == "ft_in",
+                                        onClick = { editHeightUnit = "ft_in" },
+                                        label = { Text("ft + in", fontSize = 11.sp) },
+                                        modifier = Modifier.testTag("profile_height_ft_in_unit")
+                                    )
+                                    FilterChip(
+                                        selected = editHeightUnit == "cm",
+                                        onClick = { editHeightUnit = "cm" },
+                                        label = { Text("cm", fontSize = 11.sp) },
+                                        modifier = Modifier.testTag("profile_height_cm_unit")
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        if (editHeightUnit == "ft_in") {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = editHeightFeet,
+                                    onValueChange = { editHeightFeet = it.filter(Char::isDigit).take(1) },
+                                    label = { Text("Feet (ft)") },
+                                    suffix = { Text("ft") },
+                                    modifier = Modifier.weight(1f).testTag("profile_height_feet"),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = editHeightInches,
+                                    onValueChange = { editHeightInches = it.filter(Char::isDigit).take(2).let { v -> if ((v.toIntOrNull() ?: 0) > 11) "11" else v } },
+                                    label = { Text("Inches (in)") },
+                                    suffix = { Text("in") },
+                                    modifier = Modifier.weight(1f).testTag("profile_height_inches"),
+                                    singleLine = true
+                                )
+                            }
+                            Text(
+                                "Height: ${UnitConversionEngine.ftInToCm(editHeightFeet.toIntOrNull() ?: 5, editHeightInches.toIntOrNull() ?: 1).toInt()} cm",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
                             OutlinedTextField(
                                 value = editHeight,
-                                onValueChange = { editHeight = it.filter { ch -> ch.isDigit() } },
+                                onValueChange = { editHeight = it.filter(Char::isDigit).take(3) },
                                 label = { Text("Height (cm)") },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.fillMaxWidth().testTag("profile_height_cm"),
+                                singleLine = true
                             )
                         }
                     }
@@ -430,7 +483,11 @@ fun ProfileScreen(
                 Button(
                     onClick = {
                         val age = editAge.toIntOrNull() ?: userProfile.age
-                        val height = editHeight.toFloatOrNull() ?: userProfile.heightCm
+                        val height = if (editHeightUnit == "ft_in") {
+                            UnitConversionEngine.ftInToCm(editHeightFeet.toIntOrNull() ?: 5, editHeightInches.toIntOrNull() ?: 1)
+                        } else {
+                            editHeight.toFloatOrNull() ?: userProfile.heightCm
+                        }
                         val weight = editWeight.toFloatOrNull() ?: userProfile.weightKg
                         val targetWeight = editTargetWeight.toFloatOrNull() ?: userProfile.targetWeightKg
 
