@@ -417,7 +417,7 @@ fun OnboardingScreen(
                     } else {
                         // Save profile and finish
                         val w = weightKg.toFloatOrNull() ?: 70f
-                        val h = heightCm.toFloatOrNull() ?: 175f
+                        val h = heightCmValue
                         val a = age.toIntOrNull() ?: 25
                         val targetW = targetWeightKg.toFloatOrNull() ?: 68f
                         val bmr = NutritionEngine.calculateBmr(w, h, a, gender)
