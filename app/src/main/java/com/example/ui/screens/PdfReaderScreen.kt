@@ -110,12 +110,24 @@ fun PdfReaderScreen(
                 viewModel.updateBookProgress(bookId, currentPage, book.pageCount)
                 if (continueNarrationAcrossPages && paraList.isNotEmpty()) {
                     continueNarrationAcrossPages = false
-                    ttsEngine.startReadingPage(
-                        if (translatedText.isNotBlank()) translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() } else paraList,
-                        0,
-                        speechRate,
-                        selectedLanguage
-                    )
+                    translatedText = ""
+                    coroutineScope.launch {
+                        isTranslating = true
+                        try {
+                            translatedText = BookAiService.translate(text, languageName(selectedLanguage))
+                            ttsEngine.startReadingPage(
+                                translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() },
+                                0,
+                                speechRate,
+                                selectedLanguage
+                            )
+                        } catch (e: Exception) {
+                            translationError = e.message ?: "Translation failed. Please retry."
+                            ttsEngine.startReadingPage(paraList, 0, speechRate, "en")
+                        } finally {
+                            isTranslating = false
+                        }
+                    }
                 }
             }
         }
@@ -254,7 +266,22 @@ fun PdfReaderScreen(
                                 if (isPlaying) {
                                     ttsEngine.pause()
                                 } else {
-                                    ttsEngine.startReadingPage(if (translatedText.isNotBlank()) translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() } else paragraphs, currentParagraphIndex, speechRate, selectedLanguage)
+                                    coroutineScope.launch {
+                                        if (translatedText.isBlank()) {
+                                            isTranslating = true
+                                            translationError = null
+                                            try {
+                                                translatedText = BookAiService.translate(pageText, languageName(selectedLanguage))
+                                            } catch (e: Exception) {
+                                                translationError = e.message ?: "Translation failed. Please retry."
+                                            } finally {
+                                                isTranslating = false
+                                            }
+                                        }
+                                        val speechText = if (translatedText.isNotBlank()) translatedText else pageText
+                                        val speechParagraphs = speechText.split("\\n\\n", "\\n").filter { it.isNotBlank() }
+                                        ttsEngine.startReadingPage(speechParagraphs, currentParagraphIndex, speechRate, if (translatedText.isNotBlank()) selectedLanguage else "en")
+                                    }
                                 }
                             },
                             modifier = Modifier
