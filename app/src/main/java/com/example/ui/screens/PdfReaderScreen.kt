@@ -83,7 +83,12 @@ fun PdfReaderScreen(
     // AI Dialog state
     var showAiSummaryDialog by remember { mutableStateOf(false) }
     var aiSummaryText by remember { mutableStateOf("") }
-    var isAiLoading by remember { mutableStateOf(false) }\n    var selectedLanguage by remember(book.languageCode) { mutableStateOf(book.languageCode.ifBlank { "ne" }) }\n    var showLanguageMenu by remember { mutableStateOf(false) }\n    var isTranslating by remember { mutableStateOf(false) }\n    var translatedText by remember { mutableStateOf("") }\n    var translationError by remember { mutableStateOf<String?>(null) }
+    var isAiLoading by remember { mutableStateOf(false) }
+    var selectedLanguage by remember(book.languageCode) { mutableStateOf(book.languageCode.ifBlank { "ne" }) }
+    var showLanguageMenu by remember { mutableStateOf(false) }
+    var isTranslating by remember { mutableStateOf(false) }
+    var translatedText by remember { mutableStateOf("") }
+    var translationError by remember { mutableStateOf<String?>(null) }
 
     // TTS Narration Engine
     val ttsEngine = remember {
@@ -237,7 +242,12 @@ fun PdfReaderScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    if (isTranslating) {\n                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = HealthTeal)\n                        Text("Translating into ${languageName(selectedLanguage)}…", fontSize = 12.sp)\n                    }\n                    translationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }\n                    // Page slider
+                    if (isTranslating) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = HealthTeal)
+                        Text("Translating into ${languageName(selectedLanguage)}…", fontSize = 12.sp)
+                    }
+                    translationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+                    // Page slider
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
