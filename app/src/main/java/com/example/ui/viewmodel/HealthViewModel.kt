@@ -650,10 +650,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             try {
-                // If in ON_DEVICE_ONLY mode or Gemini is not configured, execute on-device vision directly
-                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.ON_DEVICE_ONLY ||
-                    !com.example.data.network.GeminiConfig.isConfigured()
-                ) {
+                // Only force offline vision when the user explicitly selected offline mode.
+                // Cloud scanning uses the secured Vercel proxy, so no Gemini key is needed in the APK.
+                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.ON_DEVICE_ONLY) {
                     runOnDeviceScan(bitmap, imageUri)
                     return@launch
                 }
