@@ -26,9 +26,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Ensure secrets configuration file exists
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          touch .env
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "GEMINI_API_KEY=BUILD_WITHOUT_API_KEY" > .env
+            echo "GEMINI_API_KEY secret is not configured; using build-only placeholder."
+          else
+            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > .env
+          fi
 
       - name: Create debug signing keystore
         run: |
