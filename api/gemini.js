@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 413, { error: "Image request is too large. Please scan a smaller or clearer photo.", code: "PAYLOAD_TOO_LARGE" });
   }
 
-  let hasImage = false;
+  let hasImage = false;\n  let hasText = false;
   for (const content of body.contents) {
     for (const part of (content && Array.isArray(content.parts) ? content.parts : [])) {
       const inline = part && (part.inline_data || part.inlineData);
