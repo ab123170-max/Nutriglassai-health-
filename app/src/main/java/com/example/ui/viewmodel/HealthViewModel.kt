@@ -712,7 +712,6 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: Exception) {
                 _scanError.value = "AI could not identify this photo reliably: ${e.localizedMessage ?: "Unknown error"}. Please retry or enter the food manually."
                 _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
-            }
             } finally {
                 _isScanAnalyzing.value = false
             }
