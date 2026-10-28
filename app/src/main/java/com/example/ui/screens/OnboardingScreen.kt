@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
 import com.example.domain.NutritionEngine
+import com.example.domain.UnitConversionEngine
 import com.example.ui.theme.CalorieGreen
 import com.example.ui.theme.HealthNavy
 import com.example.ui.theme.HealthTeal
@@ -67,7 +68,15 @@ fun OnboardingScreen(
     var name by remember { mutableStateOf("Aayush") }
     var age by remember { mutableStateOf("26") }
     var gender by remember { mutableStateOf("Male") }
-    var heightCm by remember { mutableStateOf("175") }
+    var heightInputUnit by remember { mutableStateOf("ft_in") }
+    var heightCm by remember { mutableStateOf("155") }
+    var heightFeet by remember { mutableStateOf("5") }
+    var heightInches by remember { mutableStateOf("1") }
+    val heightCmValue = if (heightInputUnit == "ft_in") {
+        UnitConversionEngine.ftInToCm(heightFeet.toIntOrNull() ?: 5, heightInches.toIntOrNull() ?: 1)
+    } else {
+        heightCm.toFloatOrNull() ?: 155f
+    }
     var weightKg by remember { mutableStateOf("72") }
     var targetWeightKg by remember { mutableStateOf("68") }
     var activityLevel by remember { mutableStateOf("Moderate") }
@@ -203,20 +212,56 @@ fun OnboardingScreen(
                             }
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(
-                                value = heightCm,
-                                onValueChange = { heightCm = it.filter { ch -> ch.isDigit() } },
-                                label = { Text("Height (cm)") },
-                                modifier = Modifier.weight(1f)
+                        Text("Height", style = MaterialTheme.typography.labelMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = heightInputUnit == "ft_in",
+                                onClick = { heightInputUnit = "ft_in" },
+                                label = { Text("Feet + inches") },
+                                modifier = Modifier.testTag("height_unit_ft_in")
                             )
-                            OutlinedTextField(
-                                value = weightKg,
-                                onValueChange = { weightKg = it.filter { ch -> ch.isDigit() } },
-                                label = { Text("Current Wt (kg)") },
-                                modifier = Modifier.weight(1f).testTag("onboarding_weight_input")
+                            FilterChip(
+                                selected = heightInputUnit == "cm",
+                                onClick = { heightInputUnit = "cm" },
+                                label = { Text("Centimetres") },
+                                modifier = Modifier.testTag("height_unit_cm")
                             )
                         }
+                        if (heightInputUnit == "ft_in") {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = heightFeet,
+                                    onValueChange = { heightFeet = it.filter(Char::isDigit).take(1) },
+                                    label = { Text("Feet (ft)") },
+                                    suffix = { Text("ft") },
+                                    modifier = Modifier.weight(1f).testTag("onboarding_height_feet"),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = heightInches,
+                                    onValueChange = { heightInches = it.filter(Char::isDigit).take(2).let { v -> if ((v.toIntOrNull() ?: 0) > 11) "11" else v } },
+                                    label = { Text("Inches (in)") },
+                                    suffix = { Text("in") },
+                                    modifier = Modifier.weight(1f).testTag("onboarding_height_inches"),
+                                    singleLine = true
+                                )
+                            }
+                            Text("Your height: ${heightCmValue.toInt()} cm", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            OutlinedTextField(
+                                value = heightCm,
+                                onValueChange = { heightCm = it.filter(Char::isDigit).take(3) },
+                                label = { Text("Height (cm)") },
+                                modifier = Modifier.fillMaxWidth().testTag("onboarding_height_cm"),
+                                singleLine = true
+                            )
+                        }
+                        OutlinedTextField(
+                            value = weightKg,
+                            onValueChange = { weightKg = it.filter { ch -> ch.isDigit() } },
+                            label = { Text("Current Wt (kg)") },
+                            modifier = Modifier.fillMaxWidth().testTag("onboarding_weight_input")
+                        )
 
                         OutlinedTextField(
                             value = targetWeightKg,
@@ -285,7 +330,7 @@ fun OnboardingScreen(
                 3 -> {
                     // Calculated Plan Summary
                     val w = weightKg.toFloatOrNull() ?: 70f
-                    val h = heightCm.toFloatOrNull() ?: 175f
+                    val h = heightCmValue
                     val a = age.toIntOrNull() ?: 25
                     val bmr = NutritionEngine.calculateBmr(w, h, a, gender)
                     val tdee = NutritionEngine.calculateTdee(bmr, activityLevel)
