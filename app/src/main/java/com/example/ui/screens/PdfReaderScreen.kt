@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.BookAiService
 import com.example.domain.PdfEngine
 import com.example.domain.TtsNarrationEngine
 import com.example.ui.theme.CalorieGreen
@@ -68,7 +69,7 @@ fun PdfReaderScreen(
     // AI Dialog state
     var showAiSummaryDialog by remember { mutableStateOf(false) }
     var aiSummaryText by remember { mutableStateOf("") }
-    var isAiLoading by remember { mutableStateOf(false) }
+    var isAiLoading by remember { mutableStateOf(false) }\n    var selectedLanguage by remember(book.languageCode) { mutableStateOf(book.languageCode.ifBlank { "ne" }) }\n    var showLanguageMenu by remember { mutableStateOf(false) }\n    var isTranslating by remember { mutableStateOf(false) }\n    var translatedText by remember { mutableStateOf("") }\n    var translationError by remember { mutableStateOf<String?>(null) }
 
     // TTS Narration Engine
     val ttsEngine = remember {
@@ -127,6 +128,39 @@ fun PdfReaderScreen(
                     }
                 },
                 actions = {
+                    Box {
+                        TextButton(onClick = { showLanguageMenu = true }) {
+                            Text("Translate: ${languageName(selectedLanguage)}", fontSize = 11.sp)
+                        }
+                        DropdownMenu(expanded = showLanguageMenu, onDismissRequest = { showLanguageMenu = false }) {
+                            listOf("ne" to "नेपाली", "hi" to "हिन्दी", "en" to "English", "bn" to "বাংলা", "ur" to "اردو", "es" to "Español", "fr" to "Français", "pt" to "Português", "ar" to "العربية", "zh" to "中文", "ja" to "日本語", "ko" to "한국어").forEach { (code, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    selectedLanguage = code
+                                    translatedText = ""
+                                    translationError = null
+                                    showLanguageMenu = false
+                                })
+                            }
+                        }
+                    }
+                    IconButton(onClick = {
+                        if (pageText.isBlank() || pageText.startsWith("Page ${currentPage + 1}.")) {
+                            translationError = "No real PDF text was extracted. This may be a scanned PDF; OCR is needed."
+                        } else {
+                            isTranslating = true
+                            translationError = null
+                            coroutineScope.launch {
+                                try {
+                                    translatedText = BookAiService.translate(pageText, languageName(selectedLanguage))
+                                    isTextMode = true
+                                } catch (e: Exception) {
+                                    translationError = e.message ?: "Translation failed. Please retry."
+                                } finally { isTranslating = false }
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Default.Translate, contentDescription = "Translate book", tint = HealthTeal)
+                    }
                     IconButton(onClick = { isTextMode = !isTextMode }) {
                         Icon(if (isTextMode) Icons.Default.Image else Icons.Default.TextFields, contentDescription = "Toggle View")
                     }
@@ -159,7 +193,7 @@ fun PdfReaderScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Page slider
+                    if (isTranslating) {\n                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = HealthTeal)\n                        Text("Translating into ${languageName(selectedLanguage)}…", fontSize = 12.sp)\n                    }\n                    translationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }\n                    // Page slider
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -205,7 +239,7 @@ fun PdfReaderScreen(
                                 if (isPlaying) {
                                     ttsEngine.pause()
                                 } else {
-                                    ttsEngine.startReadingPage(paragraphs, currentParagraphIndex, speechRate)
+                                    ttsEngine.startReadingPage(if (translatedText.isNotBlank()) translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() } else paragraphs, currentParagraphIndex, speechRate, selectedLanguage)
                                 }
                             },
                             modifier = Modifier
@@ -250,7 +284,7 @@ fun PdfReaderScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(paragraphs) { index, para ->
+                    itemsIndexed(if (translatedText.isNotBlank()) translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() } else paragraphs) { index, para ->
                         val isCurrent = index == currentParagraphIndex && isPlaying
                         Card(
                             shape = RoundedCornerShape(12.dp),
@@ -310,4 +344,21 @@ fun PdfReaderScreen(
             }
         )
     }
+}
+
+
+private fun languageName(code: String): String = when (code) {
+    "ne" -> "Nepali"
+    "hi" -> "Hindi"
+    "en" -> "English"
+    "bn" -> "Bengali"
+    "ur" -> "Urdu"
+    "es" -> "Spanish"
+    "fr" -> "French"
+    "pt" -> "Portuguese"
+    "ar" -> "Arabic"
+    "zh" -> "Chinese"
+    "ja" -> "Japanese"
+    "ko" -> "Korean"
+    else -> "Nepali"
 }
