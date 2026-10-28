@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -27,6 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.BookAiService
+import com.example.domain.GeminiVoiceArtistService
 import com.example.domain.PdfEngine
 import com.example.domain.TtsNarrationEngine
 import com.example.ui.theme.CalorieGreen
@@ -64,11 +67,28 @@ fun PdfReaderScreen(
     var paragraphs by remember { mutableStateOf<List<String>>(emptyList()) }
     var isTextMode by remember { mutableStateOf(false) }
     var speechRate by remember { mutableFloatStateOf(1.0f) }
+    var continueNarrationAcrossPages by remember { mutableStateOf(false) }
+    var isAiVoiceLoading by remember { mutableStateOf(false) }
+    var isAiVoicePlaying by remember { mutableStateOf(false) }
+    var aiVoicePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var aiVoiceError by remember { mutableStateOf<String?>(null) }
+    var voiceStyleIndex by remember { mutableIntStateOf(0) }
+    val voiceStyles = listOf(
+        "warm, natural audiobook narrator; clear pronunciation and expressive pauses",
+        "calm bedtime storyteller; gentle pace and soft warmth",
+        "dramatic storyteller; emotionally expressive but never exaggerated",
+        "clear educational narrator; confident, measured and easy to understand"
+    )
 
     // AI Dialog state
     var showAiSummaryDialog by remember { mutableStateOf(false) }
     var aiSummaryText by remember { mutableStateOf("") }
     var isAiLoading by remember { mutableStateOf(false) }
+    var selectedLanguage by remember(book.languageCode) { mutableStateOf(book.languageCode.ifBlank { "ne" }) }
+    var showLanguageMenu by remember { mutableStateOf(false) }
+    var isTranslating by remember { mutableStateOf(false) }
+    var translatedText by remember { mutableStateOf("") }
+    var translationError by remember { mutableStateOf<String?>(null) }
 
     // TTS Narration Engine
     val ttsEngine = remember {
@@ -77,6 +97,7 @@ fun PdfReaderScreen(
             onParagraphChanged = { _ -> },
             onPageFinished = {
                 if (currentPage < book.pageCount - 1) {
+                    continueNarrationAcrossPages = true
                     currentPage += 1
                 }
             }
@@ -89,11 +110,15 @@ fun PdfReaderScreen(
     DisposableEffect(Unit) {
         onDispose {
             ttsEngine.shutdown()
+            aiVoicePlayer?.release()
+            aiVoicePlayer = null
         }
     }
 
     // Render page bitmap and extract text whenever currentPage changes
     LaunchedEffect(currentPage, book.uriString) {
+        translatedText = ""
+        translationError = null
         withContext(Dispatchers.IO) {
             val uri = Uri.parse(book.uriString)
             val bmp = PdfEngine.renderPageBitmap(context, uri, currentPage)
@@ -105,6 +130,27 @@ fun PdfReaderScreen(
                 pageText = text
                 paragraphs = paraList
                 viewModel.updateBookProgress(bookId, currentPage, book.pageCount)
+                if (continueNarrationAcrossPages && paraList.isNotEmpty()) {
+                    continueNarrationAcrossPages = false
+                    translatedText = ""
+                    coroutineScope.launch {
+                        isTranslating = true
+                        try {
+                            translatedText = BookAiService.translate(text, languageName(selectedLanguage))
+                            ttsEngine.startReadingPage(
+                                translatedText.split("\n\n", "\n").filter { it.isNotBlank() },
+                                0,
+                                speechRate,
+                                selectedLanguage
+                            )
+                        } catch (e: Exception) {
+                            translationError = e.message ?: "Translation failed. Please retry."
+                            ttsEngine.startReadingPage(paraList, 0, speechRate, "en")
+                        } finally {
+                            isTranslating = false
+                        }
+                    }
+                }
             }
         }
     }
@@ -127,6 +173,39 @@ fun PdfReaderScreen(
                     }
                 },
                 actions = {
+                    Box {
+                        TextButton(onClick = { showLanguageMenu = true }) {
+                            Text("Translate: ${languageName(selectedLanguage)}", fontSize = 11.sp)
+                        }
+                        DropdownMenu(expanded = showLanguageMenu, onDismissRequest = { showLanguageMenu = false }) {
+                            listOf("ne" to "नेपाली", "hi" to "हिन्दी", "en" to "English", "bn" to "বাংলা", "ur" to "اردو", "es" to "Español", "fr" to "Français", "pt" to "Português", "ar" to "العربية", "zh" to "中文", "ja" to "日本語", "ko" to "한국어").forEach { (code, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    selectedLanguage = code
+                                    translatedText = ""
+                                    translationError = null
+                                    showLanguageMenu = false
+                                })
+                            }
+                        }
+                    }
+                    IconButton(onClick = {
+                        if (pageText.isBlank() || pageText.startsWith("Page ${currentPage + 1}.")) {
+                            translationError = "No real PDF text was extracted. This may be a scanned PDF; OCR is needed."
+                        } else {
+                            isTranslating = true
+                            translationError = null
+                            coroutineScope.launch {
+                                try {
+                                    translatedText = BookAiService.translate(pageText, languageName(selectedLanguage))
+                                    isTextMode = true
+                                } catch (e: Exception) {
+                                    translationError = e.message ?: "Translation failed. Please retry."
+                                } finally { isTranslating = false }
+                            }
+                        }
+                    }) {
+                        Icon(Icons.Default.Translate, contentDescription = "Translate book", tint = HealthTeal)
+                    }
                     IconButton(onClick = { isTextMode = !isTextMode }) {
                         Icon(if (isTextMode) Icons.Default.Image else Icons.Default.TextFields, contentDescription = "Toggle View")
                     }
@@ -140,9 +219,13 @@ fun PdfReaderScreen(
                         showAiSummaryDialog = true
                         isAiLoading = true
                         coroutineScope.launch {
-                            // Call Gemini AI summary
-                            aiSummaryText = "AI Summary for Page ${currentPage + 1}:\n\nKey Concepts:\n• Comprehensive overview of section topics.\n• Key definitions and core principles summarized for quick walking listening.\n• Actionable learning takeaways."
-                            isAiLoading = false
+                            try {
+                                aiSummaryText = BookAiService.summarize(pageText, languageName(selectedLanguage))
+                            } catch (e: Exception) {
+                                aiSummaryText = e.message ?: "AI summary failed. Please retry."
+                            } finally {
+                                isAiLoading = false
+                            }
                         }
                     }) {
                         Icon(Icons.Default.Psychology, contentDescription = "AI Summary", tint = HealthTeal)
@@ -159,6 +242,11 @@ fun PdfReaderScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    if (isTranslating) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = HealthTeal)
+                        Text("Translating into ${languageName(selectedLanguage)}…", fontSize = 12.sp)
+                    }
+                    translationError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
                     // Page slider
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -176,6 +264,96 @@ fun PdfReaderScreen(
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            if (isAiVoicePlaying) {
+                                aiVoicePlayer?.pause()
+                                isAiVoicePlaying = false
+                            } else if (aiVoicePlayer != null) {
+                                try {
+                                    aiVoicePlayer?.start()
+                                    isAiVoicePlaying = true
+                                } catch (e: Exception) {
+                                    aiVoiceError = "Could not resume AI narration. Please generate it again."
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    isAiVoiceLoading = true
+                                    aiVoiceError = null
+                                    try {
+                                        ttsEngine.pause()
+                                        if (pageText.isBlank() || pageText.startsWith("Page ${currentPage + 1}.")) {
+                                            throw IllegalStateException("No real PDF text was extracted. Scanned PDFs need OCR before narration.")
+                                        }
+                                        if (translatedText.isBlank()) {
+                                            translatedText = BookAiService.translate(pageText, languageName(selectedLanguage))
+                                        }
+                                        val audioFile = GeminiVoiceArtistService.generateWav(
+                                            context = context,
+                                            text = translatedText,
+                                            style = voiceStyles[voiceStyleIndex],
+                                            voice = "Kore"
+                                        )
+                                        val player = MediaPlayer()
+                                        player.setDataSource(audioFile.absolutePath)
+                                        player.setOnPreparedListener { mp ->
+                                            mp.start()
+                                            isAiVoicePlaying = true
+                                            isAiVoiceLoading = false
+                                        }
+                                        player.setOnCompletionListener { mp ->
+                                            isAiVoicePlaying = false
+                                            mp.release()
+                                            if (aiVoicePlayer === mp) aiVoicePlayer = null
+                                        }
+                                        player.setOnErrorListener { mp, _, _ ->
+                                            isAiVoicePlaying = false
+                                            isAiVoiceLoading = false
+                                            aiVoiceError = "AI audio playback failed. Please try again."
+                                            mp.release()
+                                            if (aiVoicePlayer === mp) aiVoicePlayer = null
+                                            true
+                                        }
+                                        aiVoicePlayer = player
+                                        player.prepareAsync()
+                                    } catch (e: Exception) {
+                                        isAiVoiceLoading = false
+                                        aiVoiceError = e.message ?: "AI voice generation failed. Please retry."
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isAiVoiceLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = HealthNavy)
+                    ) {
+                        if (isAiVoiceLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Creating professional AI narration…")
+                        } else {
+                            Icon(if (isAiVoicePlaying) Icons.Default.Pause else Icons.Default.AutoAwesome, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isAiVoicePlaying) "Pause AI Voice Artist" else "Listen with AI Voice Artist")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Narration style", fontSize = 12.sp)
+                        TextButton(onClick = {
+                            voiceStyleIndex = (voiceStyleIndex + 1) % voiceStyles.size
+                            aiVoicePlayer?.release()
+                            aiVoicePlayer = null
+                            isAiVoicePlaying = false
+                        }) {
+                            Text(listOf("Warm narrator", "Bedtime storyteller", "Dramatic storyteller", "Educational narrator")[voiceStyleIndex])
+                        }
+                    }
+                    aiVoiceError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
 
                     // Audio Playback Controls
                     Row(
@@ -205,7 +383,22 @@ fun PdfReaderScreen(
                                 if (isPlaying) {
                                     ttsEngine.pause()
                                 } else {
-                                    ttsEngine.startReadingPage(paragraphs, currentParagraphIndex, speechRate)
+                                    coroutineScope.launch {
+                                        if (translatedText.isBlank()) {
+                                            isTranslating = true
+                                            translationError = null
+                                            try {
+                                                translatedText = BookAiService.translate(pageText, languageName(selectedLanguage))
+                                            } catch (e: Exception) {
+                                                translationError = e.message ?: "Translation failed. Please retry."
+                                            } finally {
+                                                isTranslating = false
+                                            }
+                                        }
+                                        val speechText = if (translatedText.isNotBlank()) translatedText else pageText
+                                        val speechParagraphs = speechText.split("\n\n", "\n").filter { it.isNotBlank() }
+                                        ttsEngine.startReadingPage(speechParagraphs, currentParagraphIndex, speechRate, if (translatedText.isNotBlank()) selectedLanguage else "en")
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -250,7 +443,7 @@ fun PdfReaderScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(paragraphs) { index, para ->
+                    itemsIndexed(if (translatedText.isNotBlank()) translatedText.split("\n\n", "\n").filter { it.isNotBlank() } else paragraphs) { index, para ->
                         val isCurrent = index == currentParagraphIndex && isPlaying
                         Card(
                             shape = RoundedCornerShape(12.dp),
@@ -310,4 +503,21 @@ fun PdfReaderScreen(
             }
         )
     }
+}
+
+
+private fun languageName(code: String): String = when (code) {
+    "ne" -> "Nepali"
+    "hi" -> "Hindi"
+    "en" -> "English"
+    "bn" -> "Bengali"
+    "ur" -> "Urdu"
+    "es" -> "Spanish"
+    "fr" -> "French"
+    "pt" -> "Portuguese"
+    "ar" -> "Arabic"
+    "zh" -> "Chinese"
+    "ja" -> "Japanese"
+    "ko" -> "Korean"
+    else -> "Nepali"
 }
