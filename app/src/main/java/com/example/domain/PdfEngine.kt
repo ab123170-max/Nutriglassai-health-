@@ -4,10 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
-import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 
 data class BookMetadata(
     val title: String,
@@ -16,103 +16,62 @@ data class BookMetadata(
 )
 
 object PdfEngine {
-
     fun extractBookMetadata(context: Context, uri: Uri): BookMetadata {
         var title = "Imported PDF Document"
         var pageCount = 1
-
         try {
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (nameIndex != -1) {
-                        val name = cursor.getString(nameIndex)
-                        if (!name.isNull_or_blank()) {
-                            title = name.removeSuffix(".pdf").replace("_", " ").replace("-", " ")
+                    if (nameIndex >= 0) {
+                        cursor.getString(nameIndex)?.takeIf { it.isNotBlank() }?.let {
+                            title = it.removeSuffix(".pdf").replace("_", " ").replace("-", " ")
                         }
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (_: Exception) { }
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                PdfRenderer(pfd).use { pageCount = it.pageCount.coerceAtLeast(1) }
+            }
+        } catch (_: Exception) { }
+        return BookMetadata(title, "PDF Document", pageCount)
+    }
 
+    fun renderPageBitmap(context: Context, uri: Uri, pageIndex: Int, targetWidth: Int = 1080): Bitmap? =
         try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 PdfRenderer(pfd).use { renderer ->
-                    pageCount = renderer.pageCount.coerceAtLeast(1)
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        return BookMetadata(title = title, author = "PDF Document", pageCount = pageCount)
-    }
-
-    private fun String.isNull_or_blank(): Boolean = this.isBlank()
-
-    fun renderPageBitmap(
-        context: Context,
-        uri: Uri,
-        pageIndex: Int,
-        targetWidth: Int = 1080
-    ): Bitmap? {
-        return try {
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                PdfRenderer(pfd).use { renderer ->
-                    val safePageIndex = pageIndex.coerceIn(0, renderer.pageCount - 1)
-                    renderer.openPage(safePageIndex).use { page ->
-                        val aspectRatio = page.height.toFloat() / page.width.toFloat()
+                    if (renderer.pageCount == 0) return null
+                    renderer.openPage(pageIndex.coerceIn(0, renderer.pageCount - 1)).use { page ->
                         val width = targetWidth
-                        val height = (width * aspectRatio).toInt().coerceAtLeast(100)
-
-                        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        bitmap
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    fun extractPageText(context: Context, uri: Uri, pageIndex: Int): String {
-        // Stream text extraction logic for PDF text streams
-        val extractedText = StringBuilder()
-        try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
-                    var line: String?
-                    var lineCount = 0
-                    while (reader.readLine().also { line = it } != null && lineCount < 2000) {
-                        val currentLine = line ?: ""
-                        if (currentLine.contains("BT") || currentLine.contains("Tj") || currentLine.contains("TJ")) {
-                            // Extract text literals inside parenthesis (...) or brackets [...]
-                            val textMatches = Regex("\\(([^)]+)\\)").findAll(currentLine)
-                            for (match in textMatches) {
-                                val matchText = match.groupValues[1]
-                                if (matchText.length > 2 && !matchText.startsWith("/")) {
-                                    extractedText.append(matchText).append(" ")
-                                }
-                            }
+                        val height = (width * page.height.toFloat() / page.width.toFloat()).toInt().coerceAtLeast(100)
+                        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         }
-                        lineCount++
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (_: Exception) { null }
 
-        val text = extractedText.toString().trim()
-        if (text.length > 30) {
-            return text
-        }
-
-        // Fallback placeholder text explaining page content for TTS or manual review
-        return "Page ${pageIndex + 1}. Select Read Aloud to listen to available document text, or tap next paragraph to navigate sequentially."
+    /**
+     * Extract real page text with PDFBox. PDF-rendering APIs alone cannot extract text.
+     * Scanned/image-only PDFs need OCR and return an empty string instead of fake placeholder text.
+     */
+    fun extractPageText(context: Context, uri: Uri, pageIndex: Int): String {
+        return try {
+            PDFBoxResourceLoader.init(context.applicationContext)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                PDDocument.load(input).use { document ->
+                    if (document.numberOfPages == 0) return ""
+                    val page = (pageIndex + 1).coerceIn(1, document.numberOfPages)
+                    PDFTextStripper().apply {
+                        startPage = page
+                        endPage = page
+                    }.getText(document).replace("\u0000", "").trim()
+                }
+            }.orEmpty()
+        } catch (_: Exception) { "" }
     }
 }
