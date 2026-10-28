@@ -116,7 +116,7 @@ fun PdfReaderScreen(
                         try {
                             translatedText = BookAiService.translate(text, languageName(selectedLanguage))
                             ttsEngine.startReadingPage(
-                                translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() },
+                                translatedText.split("\n\n", "\n").filter { it.isNotBlank() },
                                 0,
                                 speechRate,
                                 selectedLanguage
@@ -279,7 +279,7 @@ fun PdfReaderScreen(
                                             }
                                         }
                                         val speechText = if (translatedText.isNotBlank()) translatedText else pageText
-                                        val speechParagraphs = speechText.split("\\n\\n", "\\n").filter { it.isNotBlank() }
+                                        val speechParagraphs = speechText.split("\n\n", "\n").filter { it.isNotBlank() }
                                         ttsEngine.startReadingPage(speechParagraphs, currentParagraphIndex, speechRate, if (translatedText.isNotBlank()) selectedLanguage else "en")
                                     }
                                 }
@@ -326,7 +326,7 @@ fun PdfReaderScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(if (translatedText.isNotBlank()) translatedText.split("\\n\\n", "\\n").filter { it.isNotBlank() } else paragraphs) { index, para ->
+                    itemsIndexed(if (translatedText.isNotBlank()) translatedText.split("\n\n", "\n").filter { it.isNotBlank() } else paragraphs) { index, para ->
                         val isCurrent = index == currentParagraphIndex && isPlaying
                         Card(
                             shape = RoundedCornerShape(12.dp),
