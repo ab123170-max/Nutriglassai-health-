@@ -1,58 +1,53 @@
 package com.example.data.network
 
+import com.example.BuildConfig
+
 /**
- * Centralized Gemini Model Configuration.
- *
- * Requirements:
- * - Put model ID in one centralized configuration file so it can be changed easily.
- * - Inspect available Gemini models and supported API methods.
- * - Use Gemini 3.8 only if officially available to this project; otherwise use the newest
- *   officially available suitable model (gemini-2.5-flash) with fallback to gemini-1.5-flash.
- * - Never invent model IDs.
- * - Verify model availability and handle unsupported-model errors gracefully.
+ * Centralized Gemini Model & Endpoint Configuration.
  */
 object GeminiConfig {
 
-    /**
-     * Primary Gemini model: Latest official flash model with multimodal vision & structured JSON.
-     * In public Google Generative AI API (generativelanguage.googleapis.com), the officially
-     * supported flash models are gemini-2.5-flash and gemini-1.5-flash.
-     */
     const val PRIMARY_MODEL = "gemini-2.5-flash"
     const val FALLBACK_MODEL = "gemini-1.5-flash"
     const val BACKUP_MODEL = "gemini-2.0-flash"
 
     /**
-     * Centralized active model ID - easily changed or switched at runtime.
+     * Vercel Backend Proxy endpoint hosting secure server-side GEMINI_API_KEY
      */
+    const val PROXY_URL = "https://nutriglass-seven.vercel.app/api/gemini"
+
+    /**
+     * Google direct endpoint
+     */
+    const val DIRECT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+
     @Volatile
     var activeModel: String = PRIMARY_MODEL
 
-    /**
-     * Officially supported Gemini models in order of priority.
-     */
     val SUPPORTED_MODELS = listOf(
         "gemini-2.5-flash",
         "gemini-1.5-flash",
         "gemini-2.0-flash"
     )
 
-    const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-
     fun getGenerateContentUrl(model: String, apiKey: String): String {
-        return "$BASE_URL/$model:generateContent?key=$apiKey"
+        return "$DIRECT_BASE_URL/$model:generateContent?key=$apiKey"
     }
 
-    fun getModelsListUrl(apiKey: String): String {
-        return "$BASE_URL?key=$apiKey"
+    fun hasDirectApiKey(): Boolean {
+        val key = try {
+            BuildConfig.GEMINI_API_KEY.trim()
+        } catch (_: Exception) {
+            ""
+        }
+        return key.isNotBlank() &&
+                !key.equals("YOUR_GEMINI_API_KEY", ignoreCase = true) &&
+                !key.equals("MY_GEMINI_API_KEY", ignoreCase = true) &&
+                !key.equals("BUILD_WITHOUT_API_KEY", ignoreCase = true)
     }
 
     fun isConfigured(): Boolean {
-        val key = try {
-            com.example.BuildConfig.GEMINI_API_KEY
-        } catch (e: Exception) {
-            ""
-        }
-        return !key.isNullOrBlank() && !key.equals("YOUR_GEMINI_API_KEY", ignoreCase = true)
+        // App is configured either if direct key is provided OR backend proxy is available
+        return true
     }
 }

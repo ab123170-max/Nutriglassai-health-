@@ -155,9 +155,7 @@ fun ScannerScreen(
     ) { uri: Uri? ->
         uri?.let {
             try {
-                val inputStream = context.contentResolver.openInputStream(it)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
+                val bitmap = com.example.domain.ImagePreparationModule.decodeAndOrientImage(context, it)
                 if (bitmap != null) {
                     viewModel.startMultiFoodScan(bitmap, it.toString())
                 }
@@ -418,9 +416,13 @@ fun ScannerScreen(
                                             val executor = Executors.newSingleThreadExecutor()
                                             capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
                                                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                                                    val bitmap = imageProxyToBitmap(imageProxy)
-                                                    imageProxy.close()
-                                                    viewModel.startMultiFoodScan(bitmap, null)
+                                                    try {
+                                                        val bitmap = com.example.domain.ImagePreparationModule.imageProxyToRotatedBitmap(imageProxy)
+                                                        imageProxy.close()
+                                                        viewModel.startMultiFoodScan(bitmap, null)
+                                                    } catch (e: Exception) {
+                                                        imageProxy.close()
+                                                    }
                                                 }
 
                                                 override fun onError(exception: ImageCaptureException) {
@@ -1110,9 +1112,5 @@ private fun MacroItem(label: String, value: String, color: Color) {
 }
 
 private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
-    val planeProxy = image.planes[0]
-    val buffer: ByteBuffer = planeProxy.buffer
-    val bytes = ByteArray(buffer.remaining())
-    buffer.get(bytes)
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    return com.example.domain.ImagePreparationModule.imageProxyToRotatedBitmap(image)
 }

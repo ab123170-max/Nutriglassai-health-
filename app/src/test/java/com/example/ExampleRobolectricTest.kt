@@ -478,5 +478,129 @@ class ExampleRobolectricTest {
     autoPauseSession.processGpsUpdate(27.7175, 85.3245, accuracyMeters = 10f, speedMps = 0.8f)
     assertFalse("Session should automatically resume when speed >= 0.4 m/s", autoPauseSession.isAutoPaused)
   }
+
+  // --- Tests for Step 7: Image Preparation & Gemini Vision API Pipeline ---
+
+  @Test
+  fun testValidJpegImagePreparation() {
+    val bitmap = android.graphics.Bitmap.createBitmap(300, 200, android.graphics.Bitmap.Config.ARGB_8888)
+    val prepared = com.example.domain.ImagePreparationModule.prepareBitmapForAi(bitmap, maxDimension = 1024)
+
+    assertEquals("image/jpeg", prepared.mimeType)
+    assertTrue("JPEG byte count must be substantial", prepared.byteCount > 100)
+    assertTrue("Must verify JPEG magic bytes (SOI/EOI)", com.example.domain.ImagePreparationModule.isJpeg(prepared.jpegBytes))
+    assertFalse("Base64 string must not contain line breaks", prepared.base64Data.contains("\n"))
+    assertFalse("Base64 string must not contain carriage returns", prepared.base64Data.contains("\r"))
+  }
+
+  @Test
+  fun testPngConvertedToJpeg() {
+    val bitmap = android.graphics.Bitmap.createBitmap(150, 150, android.graphics.Bitmap.Config.ARGB_8888)
+    val pngStream = java.io.ByteArrayOutputStream()
+    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, pngStream)
+    val pngBytes = pngStream.toByteArray()
+
+    assertTrue("Raw bytes should start as PNG", com.example.domain.ImagePreparationModule.isPng(pngBytes))
+
+    val converted = com.example.domain.ImagePreparationModule.convertBytesToJpeg(pngBytes)
+    assertEquals("image/jpeg", converted.mimeType)
+    assertTrue("Converted output must be JPEG magic bytes", com.example.domain.ImagePreparationModule.isJpeg(converted.jpegBytes))
+  }
+
+  @Test
+  fun testEmptyAndCorruptImageDataRejected() {
+    var emptyRejected = false
+    try {
+      com.example.domain.ImagePreparationModule.convertBytesToJpeg(ByteArray(0))
+    } catch (e: IllegalArgumentException) {
+      emptyRejected = true
+    }
+    assertTrue("Empty bytes must throw IllegalArgumentException", emptyRejected)
+
+    var corruptRejected = false
+    try {
+      val corruptBytes = byteArrayOf(0x00, 0x01, 0x02, 0x03, 0x04)
+      com.example.domain.ImagePreparationModule.convertBytesToJpeg(corruptBytes)
+    } catch (e: IllegalArgumentException) {
+      corruptRejected = true
+    }
+    assertTrue("Corrupt bytes must throw IllegalArgumentException", corruptRejected)
+  }
+
+  @Test
+  fun testBase64WithDataUrlPrefixCleaned() {
+    val rawBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    val withPrefix = "data:image/png;base64, $rawBase64\n\r"
+    val cleaned = com.example.domain.ImagePreparationModule.cleanBase64Data(withPrefix)
+
+    assertEquals(rawBase64, cleaned)
+    assertFalse("Must not contain data URL prefix", cleaned.contains("data:"))
+    assertFalse("Must not contain whitespace", cleaned.contains(" "))
+  }
+
+  @Test
+  fun testDoubleEncodedBase64Unwrapped() {
+    val bitmap = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
+    val prepared = com.example.domain.ImagePreparationModule.prepareBitmapForAi(bitmap)
+    val singleEncoded = prepared.base64Data
+
+    // Accidental double encode
+    val doubleEncoded = android.util.Base64.encodeToString(singleEncoded.toByteArray(Charsets.US_ASCII), android.util.Base64.NO_WRAP)
+
+    val unwrapped = com.example.domain.ImagePreparationModule.cleanBase64Data(doubleEncoded)
+    assertEquals("Should unwrap double-encoded Base64 string", singleEncoded, unwrapped)
+  }
+
+  @Test
+  fun testRotatedCameraImagePreparation() {
+    val bitmap = android.graphics.Bitmap.createBitmap(200, 100, android.graphics.Bitmap.Config.ARGB_8888)
+    val prepared = com.example.domain.ImagePreparationModule.prepareBitmapForAi(bitmap, rotationDegrees = 90)
+
+    // A 200x100 image rotated 90 degrees becomes 100x200
+    assertEquals(100, prepared.width)
+    assertEquals(200, prepared.height)
+  }
+
+  @Test
+  fun testOversizedImageResizing() {
+    val bitmap = android.graphics.Bitmap.createBitmap(2000, 1000, android.graphics.Bitmap.Config.ARGB_8888)
+    val prepared = com.example.domain.ImagePreparationModule.prepareBitmapForAi(bitmap, maxDimension = 1000)
+
+    // Max dimension should be clamped to 1000 while maintaining 2:1 aspect ratio -> 1000x500
+    assertEquals(1000, prepared.width)
+    assertEquals(500, prepared.height)
+    assertTrue("JPEG magic bytes valid on downscaled image", com.example.domain.ImagePreparationModule.isJpeg(prepared.jpegBytes))
+  }
+
+  @Test
+  fun testGeminiRequestSerialization() {
+    val prompt = "Identify visible foods and nutrients."
+    val dummyBase64 = "U0FNUExF"
+    val json = com.example.data.network.GeminiFoodService.buildGeminiRequestBody(prompt, dummyBase64)
+
+    assertTrue("Request must have contents array", json.has("contents"))
+    val contents = json.getJSONArray("contents")
+    assertEquals(1, contents.length())
+
+    val parts = contents.getJSONObject(0).getJSONArray("parts")
+    assertEquals(2, parts.length())
+    assertEquals(prompt, parts.getJSONObject(0).getString("text"))
+
+    val inlinePart = parts.getJSONObject(1)
+    assertTrue("Must have inline_data schema", inlinePart.has("inline_data"))
+    assertEquals("image/jpeg", inlinePart.getJSONObject("inline_data").getString("mime_type"))
+    assertEquals(dummyBase64, inlinePart.getJSONObject("inline_data").getString("data"))
+
+    assertTrue("Must have generationConfig", json.has("generationConfig"))
+    val genConfig = json.getJSONObject("generationConfig")
+    assertEquals("application/json", genConfig.getString("responseMimeType"))
+  }
+
+  @Test
+  fun testHttp400ErrorResponseParsing() {
+    val sampleError400 = """{"error":{"code":400,"message":"Invalid image payload: image too blurry","status":"INVALID_ARGUMENT"}}"""
+    val parsed = com.example.data.network.GeminiFoodService.parseErrorMessage(sampleError400)
+    assertTrue(parsed.contains("image too blurry"))
+  }
 }
 

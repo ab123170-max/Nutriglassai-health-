@@ -137,22 +137,7 @@ class CameraProcessingModule(
     }
 
     private fun imageProxyToRotatedBitmap(image: ImageProxy, rotationDegrees: Int): Bitmap {
-        val plane = image.planes[0]
-        val buffer: ByteBuffer = plane.buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-        val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-
-        return if (rotationDegrees != 0 && original != null) {
-            val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
-            val rotated = Bitmap.createBitmap(original, 0, 0, original.width, original.height, matrix, true)
-            if (rotated != original) {
-                original.recycle()
-            }
-            rotated
-        } else {
-            original ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        }
+        return com.example.domain.ImagePreparationModule.imageProxyToRotatedBitmap(image)
     }
 
     fun release() {

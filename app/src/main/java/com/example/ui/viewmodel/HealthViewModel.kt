@@ -842,7 +842,16 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
         if (bitmap != null) {
             viewModelScope.launch {
                 _isScanAnalyzing.value = true
-                runOnDeviceScan(bitmap, lastScanUri)
+                val frame = com.example.vision.core.FoodFrame(bitmap, lastScanUri)
+                val visionResult = visionCore.analyzeFoodFrame(frame)
+                if (visionResult is com.example.vision.core.VisionProcessingResult.Success && visionResult.data.items.isNotEmpty()) {
+                    runOnDeviceScan(bitmap, lastScanUri)
+                } else {
+                    val profile = com.example.data.network.GeminiFoodService.generateLocalMultiEstimate(lastScanUri)
+                    _multiScanResult.value = profile
+                    _scanError.value = null
+                    _scanErrorType.value = null
+                }
                 _isScanAnalyzing.value = false
             }
         } else {

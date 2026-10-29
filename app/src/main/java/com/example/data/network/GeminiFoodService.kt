@@ -9,6 +9,7 @@ import com.example.data.local.PreloadedData
 import com.example.data.model.FoodScanRecord
 import com.example.data.model.MultiFoodScanResult
 import com.example.data.model.RecognizedFoodItem
+import com.example.domain.ImagePreparationModule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,7 +18,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.UUID
@@ -60,92 +60,126 @@ object GeminiFoodService {
     }
 
     /**
-     * Multi-food AI analysis identifying multiple foods, portions, preparation, allergens, and ingredients
+     * Multi-food AI analysis identifying multiple foods, portions, preparation, allergens, and ingredients.
+     * Uses ImagePreparationModule for validation, orientation correction, downsampling, and JPEG verification.
      */
     suspend fun analyzeFoodImageMulti(
         bitmap: Bitmap,
         imageUriString: String?
     ): MultiFoodScanResult = withContext(Dispatchers.IO) {
-        val apiKey = getApiKey()
+        // 1. Prepare image using robust ImagePreparationModule
+        val prepared = try {
+            ImagePreparationModule.prepareBitmapForAi(bitmap)
+        } catch (e: Exception) {
+            Log.e("FoodScanner", "Image preparation failed: ${e.message}", e)
+            throw GeminiAnalysisException(
+                message = "Invalid image payload: ${e.message}. Please take a clear photo of your meal.",
+                errorType = GeminiErrorType.INVALID_PAYLOAD,
+                cause = e
+            )
+        }
 
-        // Fast client-side image compression & hashing
-        val compressedBytes = compressBitmap(bitmap)
-        val imageHash = computeHash(compressedBytes)
+        val imageHash = computeHash(prepared.jpegBytes)
+        Log.d("FoodScanner", "Sending image file size: ${prepared.byteCount} bytes")
 
-        Log.d("FoodScanner", "Sending image file size: ${compressedBytes.size} bytes")
-
-        // Check if exact same image is already in cache
+        // Check if exact same image is already in memory cache
         scanResultCache.get(imageHash)?.let { cachedResult ->
             return@withContext cachedResult.copy(imageUri = imageUriString)
         }
 
-        // Validate API Key before network request
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            throw GeminiAnalysisException(
-                message = "Gemini API key is not configured. Please add your GEMINI_API_KEY in the AI Studio Secrets panel, or use the offline Nepali food profile.",
-                errorType = GeminiErrorType.API_KEY_MISSING
-            )
-        }
-
-        val base64Image = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
         val prompt = buildAnalysisPrompt()
+        val requestJson = buildGeminiRequestBody(prompt, prepared.base64Data, prepared.mimeType)
 
-        // Attempt first with primary model, then with fallback model if 404/unsupported
-        val candidateModels = listOf(GeminiConfig.activeModel, GeminiConfig.FALLBACK_MODEL).distinct()
+        val hasDirectKey = GeminiConfig.hasDirectApiKey()
+        val directKey = getApiKey()
+
         var lastException: GeminiAnalysisException? = null
 
-        for (model in candidateModels) {
-            try {
-                val result = executeGenerateContent(
-                    model = model,
-                    apiKey = apiKey,
-                    prompt = prompt,
-                    base64Image = base64Image,
-                    imageUriString = imageUriString
-                )
-                // Cache successful result
-                scanResultCache.put(imageHash, result)
-                GeminiConfig.activeModel = model
-                return@withContext result
-            } catch (e: GeminiAnalysisException) {
-                lastException = e
-                // If model was not found (404), try fallback model
-                if (e.errorType == GeminiErrorType.MODEL_UNAVAILABLE && model != GeminiConfig.FALLBACK_MODEL) {
-                    continue
-                } else {
-                    throw e
-                }
-            } catch (e: IOException) {
+        // Channel A: Attempt via Secure Vercel Backend Proxy (hosts GEMINI_API_KEY server-side)
+        try {
+            Log.d("FoodScanner", "Attempting food analysis via backend proxy (${GeminiConfig.PROXY_URL})...")
+            val proxyResult = executeProxyCall(requestJson, imageUriString, prepared.byteCount, prepared.mimeType)
+            scanResultCache.put(imageHash, proxyResult)
+            return@withContext proxyResult
+        } catch (e: GeminiAnalysisException) {
+            Log.w("FoodScanner", "Proxy attempt returned [${e.errorType}] (HTTP ${e.httpCode}): ${e.message}")
+            lastException = e
+            // If proxy returned an error and user did NOT provide a local API key, rethrow immediately
+            if (!hasDirectKey) {
+                throw e
+            }
+        } catch (e: Exception) {
+            Log.w("FoodScanner", "Proxy network error: ${e.message}")
+            if (!hasDirectKey) {
                 throw GeminiAnalysisException(
-                    message = "Network connection failed. Please check your internet connection and try again.",
+                    message = "Network connection failed communicating with AI service. Please check your internet connection.",
                     errorType = GeminiErrorType.NETWORK_ERROR,
                     cause = e
                 )
             }
         }
 
+        // Channel B: Direct Google Generative AI Fallback (if user configured a valid direct key in AI Studio Secrets)
+        if (hasDirectKey) {
+            val candidateModels = listOf(GeminiConfig.activeModel, GeminiConfig.FALLBACK_MODEL, GeminiConfig.BACKUP_MODEL).distinct()
+            for (model in candidateModels) {
+                try {
+                    Log.d("FoodScanner", "Attempting direct Google Generative AI with model $model...")
+                    val result = executeDirectCall(model, directKey, requestJson, imageUriString, prepared.byteCount, prepared.mimeType)
+                    scanResultCache.put(imageHash, result)
+                    GeminiConfig.activeModel = model
+                    return@withContext result
+                } catch (e: GeminiAnalysisException) {
+                    lastException = e
+                    if (e.errorType == GeminiErrorType.MODEL_UNAVAILABLE && model != candidateModels.last()) {
+                        continue
+                    }
+                    throw e
+                } catch (e: IOException) {
+                    throw GeminiAnalysisException(
+                        message = "Network timeout communicating directly with Gemini API. Check your internet connection.",
+                        errorType = GeminiErrorType.NETWORK_ERROR,
+                        cause = e
+                    )
+                }
+            }
+        }
+
         throw lastException ?: GeminiAnalysisException(
-            message = "AI could not analyze this photo. Check the server API key and model.",
+            message = "AI service could not analyze this photo. Check connection and try again.",
             errorType = GeminiErrorType.INVALID_RESPONSE
         )
     }
 
-    private fun executeGenerateContent(
-        model: String,
-        apiKey: String,
-        prompt: String,
-        base64Image: String,
-        imageUriString: String?
-    ): MultiFoodScanResult {
-        val requestJson = JSONObject().apply {
+    /**
+     * Builds request JSON following supported Gemini generateContent structure:
+     * {
+     *   "contents": [
+     *     {
+     *       "parts": [
+     *         { "text": "..." },
+     *         { "inline_data": { "mime_type": "image/jpeg", "data": "..." } }
+     *       ]
+     *     }
+     *   ]
+     * }
+     */
+    fun buildGeminiRequestBody(prompt: String, base64Image: String, mimeType: String = "image/jpeg"): JSONObject {
+        val cleanBase64 = ImagePreparationModule.cleanBase64Data(base64Image)
+        return JSONObject().apply {
             val contents = JSONArray().apply {
                 val contentObj = JSONObject().apply {
                     val parts = JSONArray().apply {
                         put(JSONObject().apply { put("text", prompt) })
+                        // Provide both inline_data and inlineData for universal server/proxy compatibility
                         put(JSONObject().apply {
                             put("inline_data", JSONObject().apply {
-                                put("mime_type", "image/jpeg")
-                                put("data", base64Image)
+                                put("mime_type", mimeType)
+                                put("data", cleanBase64)
+                            })
+                            put("inlineData", JSONObject().apply {
+                                put("mimeType", mimeType)
+                                put("data", cleanBase64)
                             })
                         })
                     }
@@ -155,14 +189,55 @@ object GeminiFoodService {
             }
             put("contents", contents)
 
-            // Enforce JSON structured output for deterministic parsing
+            // Enforce camelCase responseMimeType for Google REST API standard
             val generationConfig = JSONObject().apply {
-                put("response_mime_type", "application/json")
+                put("responseMimeType", "application/json")
                 put("temperature", 0.2)
             }
             put("generationConfig", generationConfig)
         }
+    }
 
+    private fun executeProxyCall(
+        requestJson: JSONObject,
+        imageUriString: String?,
+        imageByteCount: Int,
+        mimeType: String
+    ): MultiFoodScanResult {
+        val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url(GeminiConfig.PROXY_URL)
+            .post(requestBody)
+            .build()
+
+        val response = try {
+            client.newCall(request).execute()
+        } catch (e: IOException) {
+            throw GeminiAnalysisException(
+                message = "Network timeout communicating with AI proxy. Check your internet connection.",
+                errorType = GeminiErrorType.NETWORK_ERROR,
+                cause = e
+            )
+        }
+
+        val responseBody = response.body?.string() ?: ""
+        val modelHeader = response.header("X-Nutriglass-Model") ?: "backend-proxy"
+
+        if (!response.isSuccessful) {
+            handleHttpError(response.code, responseBody, GeminiConfig.PROXY_URL, imageByteCount, mimeType)
+        }
+
+        return parseAndValidateGeminiResponse(responseBody, modelHeader, imageUriString)
+    }
+
+    private fun executeDirectCall(
+        model: String,
+        apiKey: String,
+        requestJson: JSONObject,
+        imageUriString: String?,
+        imageByteCount: Int,
+        mimeType: String
+    ): MultiFoodScanResult {
         val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
         val url = GeminiConfig.getGenerateContentUrl(model, apiKey)
 
@@ -184,46 +259,78 @@ object GeminiFoodService {
         val responseBody = response.body?.string() ?: ""
 
         if (!response.isSuccessful) {
-            when (response.code) {
-                400 -> {
-                    throw GeminiAnalysisException(
-                        message = "Invalid image payload or request format (HTTP 400). Please take another photo.",
-                        errorType = GeminiErrorType.INVALID_PAYLOAD,
-                        httpCode = 400
-                    )
-                }
-                401, 403 -> {
-                    throw GeminiAnalysisException(
-                        message = "Gemini API key is unauthorized or rejected (HTTP ${response.code}). Verify your key in the AI Studio Secrets panel.",
-                        errorType = GeminiErrorType.API_KEY_INVALID,
-                        httpCode = response.code
-                    )
-                }
-                404 -> {
-                    throw GeminiAnalysisException(
-                        message = "Gemini model '$model' is not found or unsupported on this endpoint (HTTP 404).",
-                        errorType = GeminiErrorType.MODEL_UNAVAILABLE,
-                        httpCode = 404
-                    )
-                }
-                429 -> {
-                    throw GeminiAnalysisException(
-                        message = "Gemini API rate limit or quota exceeded (HTTP 429). Please wait a few moments before trying again.",
-                        errorType = GeminiErrorType.QUOTA_EXCEEDED,
-                        httpCode = 429
-                    )
-                }
-                else -> {
-                    throw GeminiAnalysisException(
-                        message = "AI service error (HTTP ${response.code}): ${parseErrorMessage(responseBody)}",
-                        errorType = GeminiErrorType.INVALID_RESPONSE,
-                        httpCode = response.code
-                    )
-                }
-            }
+            handleHttpError(response.code, responseBody, "Google Generative AI ($model)", imageByteCount, mimeType)
         }
 
         return parseAndValidateGeminiResponse(responseBody, model, imageUriString)
+    }
+
+    private fun handleHttpError(
+        code: Int,
+        responseBody: String,
+        endpoint: String,
+        imageByteCount: Int,
+        mimeType: String
+    ): Nothing {
+        val parsedMessage = parseErrorMessage(responseBody)
+
+        // Safe diagnostic logging (never log API keys or full base64 strings)
+        Log.w(
+            "FoodScanner",
+            "HTTP $code error from $endpoint. Message: '$parsedMessage'. Image bytes: $imageByteCount, MIME: $mimeType, Stage: API_CALL"
+        )
+
+        when (code) {
+            400 -> {
+                throw GeminiAnalysisException(
+                    message = "Request validation error (HTTP 400): $parsedMessage",
+                    errorType = GeminiErrorType.INVALID_PAYLOAD,
+                    httpCode = 400
+                )
+            }
+            401, 403 -> {
+                throw GeminiAnalysisException(
+                    message = "Gemini API authorization rejected (HTTP $code): $parsedMessage",
+                    errorType = GeminiErrorType.API_KEY_INVALID,
+                    httpCode = code
+                )
+            }
+            404 -> {
+                throw GeminiAnalysisException(
+                    message = "Gemini model is unsupported or not found (HTTP 404): $parsedMessage",
+                    errorType = GeminiErrorType.MODEL_UNAVAILABLE,
+                    httpCode = 404
+                )
+            }
+            413 -> {
+                throw GeminiAnalysisException(
+                    message = "Image payload is too large for AI service (HTTP 413). Please take a closer, single-dish photo.",
+                    errorType = GeminiErrorType.INVALID_PAYLOAD,
+                    httpCode = 413
+                )
+            }
+            429 -> {
+                throw GeminiAnalysisException(
+                    message = "Gemini API rate limit or quota exceeded (HTTP 429). Please wait a few moments before retrying.",
+                    errorType = GeminiErrorType.QUOTA_EXCEEDED,
+                    httpCode = 429
+                )
+            }
+            503 -> {
+                throw GeminiAnalysisException(
+                    message = "AI service temporarily unavailable (HTTP 503): $parsedMessage",
+                    errorType = GeminiErrorType.INVALID_RESPONSE,
+                    httpCode = 503
+                )
+            }
+            else -> {
+                throw GeminiAnalysisException(
+                    message = "AI service error (HTTP $code): $parsedMessage",
+                    errorType = GeminiErrorType.INVALID_RESPONSE,
+                    httpCode = code
+                )
+            }
+        }
     }
 
     private fun parseAndValidateGeminiResponse(
@@ -236,7 +343,7 @@ object GeminiFoodService {
             val candidates = jsonResponse.optJSONArray("candidates")
             if (candidates == null || candidates.length() == 0) {
                 throw GeminiAnalysisException(
-                    message = "AI response contained no candidate results. The image may be unclear or obscured.",
+                    message = "AI response contained no candidate results. The photo may be blurry or obscured.",
                     errorType = GeminiErrorType.BLURRY_OR_NO_FOOD
                 )
             }
@@ -277,7 +384,7 @@ object GeminiFoodService {
 
             if (parsed == null) {
                 throw GeminiAnalysisException(
-                    message = "JSON Parsing failed! Could not parse structured nutrition data from AI response.",
+                    message = "Could not parse structured nutrition data from AI response: ${parseErrorMessage(rawText)}",
                     errorType = GeminiErrorType.INVALID_RESPONSE
                 )
             }
@@ -443,40 +550,28 @@ object GeminiFoodService {
         """.trimIndent()
     }
 
-    private fun parseErrorMessage(errorBody: String): String {
+    fun parseErrorMessage(errorBody: String): String {
         return try {
             val json = JSONObject(errorBody)
-            val errorObj = json.optJSONObject("error")
-            errorObj?.optString("message", "Unknown error") ?: "Unknown error"
-        } catch (e: Exception) {
-            "Service unavailable"
+            if (json.has("error")) {
+                val errObj = json.optJSONObject("error")
+                errObj?.optString("message") ?: json.optString("error")
+            } else if (json.has("message")) {
+                json.optString("message")
+            } else {
+                "Service returned HTTP error"
+            }
+        } catch (_: Exception) {
+            if (errorBody.length < 200 && errorBody.isNotBlank()) errorBody.trim() else "Unknown service error"
         }
     }
 
     private fun getApiKey(): String {
         return try {
             BuildConfig.GEMINI_API_KEY.trim()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             ""
         }
-    }
-
-    private fun compressBitmap(bitmap: Bitmap): ByteArray {
-        val outputStream = ByteArrayOutputStream()
-        val maxDim = 1024
-        val scaledBitmap = if (bitmap.width > maxDim || bitmap.height > maxDim) {
-            val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
-            val (newWidth, newHeight) = if (ratio > 1) {
-                maxDim to (maxDim / ratio).toInt()
-            } else {
-                (maxDim * ratio).toInt() to maxDim
-            }
-            Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-        } else {
-            bitmap
-        }
-        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-        return outputStream.toByteArray()
     }
 
     private fun computeHash(bytes: ByteArray): String {
@@ -643,7 +738,7 @@ object GeminiFoodService {
     ): String = withContext(Dispatchers.IO) {
         val apiKey = getApiKey()
 
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+        if (!GeminiConfig.hasDirectApiKey()) {
             return@withContext generateLocalHealthAdvice(userGoal, caloriesConsumedToday, targetCalories, waterConsumedMl, stepsTaken)
         }
 
@@ -690,13 +785,13 @@ object GeminiFoodService {
                             return@withContext text
                         }
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Try next candidate model
                 }
             }
 
             generateLocalHealthAdvice(userGoal, caloriesConsumedToday, targetCalories, waterConsumedMl, stepsTaken)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             generateLocalHealthAdvice(userGoal, caloriesConsumedToday, targetCalories, waterConsumedMl, stepsTaken)
         }
     }
