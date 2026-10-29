@@ -394,5 +394,89 @@ class ExampleRobolectricTest {
     assertTrue(plan.proposedAdjustments.isNotEmpty())
     assertTrue(plan.affordableFoodAlternatives.contains("Lentils"))
   }
+
+  @Test
+  fun testRenderMealHeaderDeduplicationAndFormatting() {
+    // Null or empty
+    assertEquals("Scanned Meal", com.example.domain.NutritionEngine.renderMealHeader(null))
+    assertEquals("Scanned Meal", com.example.domain.NutritionEngine.renderMealHeader(emptyList()))
+
+    // Single item
+    val single = listOf(object { val name = "Dal Bhat" }).map { it.name }
+    assertEquals("Dal Bhat", com.example.domain.NutritionEngine.renderMealHeader(single))
+
+    // Duplicates deduplicated
+    val duplicates = listOf("Dal Bhat", "Dal Bhat ", "Dal Bhat")
+    assertEquals("Dal Bhat", com.example.domain.NutritionEngine.renderMealHeader(duplicates))
+
+    // Two items
+    val twoItems = listOf("Dal Bhat", "Chicken Curry")
+    assertEquals("Dal Bhat, Chicken Curry", com.example.domain.NutritionEngine.renderMealHeader(twoItems))
+
+    // Three or more items (+N more)
+    val fourItems = listOf("Dal Bhat", "Chicken Curry", "Aloo Saag", "Momo")
+    assertEquals("Dal Bhat, Chicken Curry +2 more", com.example.domain.NutritionEngine.renderMealHeader(fourItems))
+  }
+
+  @Test
+  fun testGpsTrackingEngineCalculationsAndFallback() {
+    // Haversine distance between Kathmandu (27.7172, 85.3240) and Lalitpur (27.6670, 85.3206) (~5.6 km)
+    val distKm = com.example.domain.GpsTrackingEngine.calculateDistanceKm(27.7172, 85.3240, 27.6670, 85.3206)
+    assertEquals(5.6f, distKm.toFloat(), 0.5f)
+
+    // Accuracy Check
+    assertTrue(com.example.domain.GpsTrackingEngine.isAccuracyUsable(15f))
+    assertFalse(com.example.domain.GpsTrackingEngine.isAccuracyUsable(65f))
+
+    // Jitter filter (> 4 meters)
+    assertTrue(com.example.domain.GpsTrackingEngine.isSignificantMovementMeters(5.2f))
+    assertFalse(com.example.domain.GpsTrackingEngine.isSignificantMovementMeters(2.1f))
+
+    // Fallback distance calculations
+    val estDistFromSteps = com.example.domain.GpsTrackingEngine.calculateFallbackDistanceKm(secondsElapsed = 600, fallbackStepCount = 1000)
+    assertEquals(0.75f, estDistFromSteps, 0.01f)
+
+    val estDistFromTime = com.example.domain.GpsTrackingEngine.calculateFallbackDistanceKm(secondsElapsed = 3600, fallbackStepCount = 0)
+    assertEquals(4.5f, estDistFromTime, 0.01f)
+
+    // Calories & Pace Formatting
+    val cals = com.example.domain.GpsTrackingEngine.calculateCaloriesBurned(2.0f)
+    assertEquals(130, cals)
+
+    val pace = com.example.domain.GpsTrackingEngine.formatPace(secondsElapsed = 720, distanceKm = 2.0f) // 6 min/km -> 6'00" /km
+    assertEquals("6'00\" /km", pace)
+  }
+
+  @Test
+  fun testGpsAutoPauseAndResumeDetection() {
+    val autoPauseSession = com.example.domain.GpsAutoPauseSession()
+    autoPauseSession.startSession()
+
+    assertTrue(autoPauseSession.isTracking)
+    assertFalse(autoPauseSession.isAutoPaused)
+
+    // 1. Noisy point (accuracy > 25m) should be ignored
+    val noisyIgnored = autoPauseSession.processGpsUpdate(27.7172, 85.3240, accuracyMeters = 30f, speedMps = 1.2f)
+    assertFalse(noisyIgnored)
+
+    // 2. Initial valid GPS fix (speed = 1.2 m/s > 0.4 m/s)
+    autoPauseSession.processGpsUpdate(27.7172, 85.3240, accuracyMeters = 10f, speedMps = 1.2f)
+    assertFalse(autoPauseSession.isAutoPaused)
+
+    // 3. User stops moving (speed = 0.1 m/s < 0.4 m/s) for 5 stationary updates
+    for (i in 1..4) {
+      autoPauseSession.processGpsUpdate(27.7172, 85.3240, accuracyMeters = 10f, speedMps = 0.1f)
+      assertFalse("Should not pause before 5 seconds threshold", autoPauseSession.isAutoPaused)
+    }
+
+    // 5th stationary update triggers auto-pause
+    val pauseTriggered = autoPauseSession.processGpsUpdate(27.7172, 85.3240, accuracyMeters = 10f, speedMps = 0.1f)
+    assertTrue("Auto-pause should trigger on 5th stationary update", pauseTriggered)
+    assertTrue(autoPauseSession.isAutoPaused)
+
+    // 4. User resumes walking (speed = 0.8 m/s >= 0.4 m/s)
+    autoPauseSession.processGpsUpdate(27.7175, 85.3245, accuracyMeters = 10f, speedMps = 0.8f)
+    assertFalse("Session should automatically resume when speed >= 0.4 m/s", autoPauseSession.isAutoPaused)
+  }
 }
 

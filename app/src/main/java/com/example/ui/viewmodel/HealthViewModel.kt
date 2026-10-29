@@ -719,20 +719,22 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
                 _scanError.value = "Scanning cancelled."
                 _scanErrorType.value = null
             } catch (e: com.example.data.network.GeminiAnalysisException) {
-                // If Auto Hybrid is enabled, seamlessly fall back to on-device neural food vision!
-                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID) {
+                // Do NOT fallback to hardcoded objects when JSON parsing or API validation fails
+                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID &&
+                    (e.errorType == com.example.data.network.GeminiErrorType.NETWORK_ERROR ||
+                     e.errorType == com.example.data.network.GeminiErrorType.MODEL_UNAVAILABLE ||
+                     e.errorType == com.example.data.network.GeminiErrorType.API_KEY_MISSING)
+                ) {
                     runOnDeviceScan(bitmap, imageUri)
                 } else {
                     _scanError.value = e.message
                     _scanErrorType.value = e.errorType
+                    _multiScanResult.value = null
                 }
             } catch (e: Exception) {
-                if (_visionMode.value == com.example.vision.core.VisionProcessingMode.AUTO_HYBRID) {
-                    runOnDeviceScan(bitmap, imageUri)
-                } else {
-                    _scanError.value = "AI could not analyze this photo: ${e.localizedMessage ?: "Unknown error"}. Check server API key and model."
-                    _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
-                }
+                _scanError.value = "AI could not analyze this photo: ${e.localizedMessage ?: "Unknown error"}."
+                _scanErrorType.value = com.example.data.network.GeminiErrorType.INVALID_RESPONSE
+                _multiScanResult.value = null
             } finally {
                 _isScanAnalyzing.value = false
             }
@@ -766,9 +768,13 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
                         requiresPortionConfirmation = item.portionEstimate.requiresUserConfirmation
                     )
                 }
-                val mealTitle = if (output.items.isNotEmpty()) {
-                    output.items.joinToString(", ") { it.label }.take(35)
-                } else "Scanned Food"
+                if (recognizedItems.isEmpty()) {
+                    _scanError.value = "No food items detected in photo. Please ensure good lighting and clear view."
+                    _scanErrorType.value = com.example.data.network.GeminiErrorType.BLURRY_OR_NO_FOOD
+                    _multiScanResult.value = null
+                    return
+                }
+                val mealTitle = NutritionEngine.renderMealHeader(output.items.map { it.label })
 
                 val scanResult = MultiFoodScanResult(
                     mealTitle = mealTitle,
@@ -840,10 +846,9 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
                 _isScanAnalyzing.value = false
             }
         } else {
-            val fallback = com.example.data.network.GeminiFoodService.generateLocalMultiEstimate(lastScanUri)
-            _multiScanResult.value = fallback
-            _scanError.value = null
-            _scanErrorType.value = null
+            _scanError.value = "No food photo available to analyze. Please capture or pick a photo first."
+            _scanErrorType.value = com.example.data.network.GeminiErrorType.BLURRY_OR_NO_FOOD
+            _multiScanResult.value = null
             _isScanAnalyzing.value = false
         }
     }

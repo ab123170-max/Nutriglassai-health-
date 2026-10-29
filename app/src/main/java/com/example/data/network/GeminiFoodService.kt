@@ -2,6 +2,7 @@ package com.example.data.network
 
 import android.graphics.Bitmap
 import android.util.Base64
+import android.util.Log
 import android.util.LruCache
 import com.example.BuildConfig
 import com.example.data.local.PreloadedData
@@ -70,6 +71,8 @@ object GeminiFoodService {
         // Fast client-side image compression & hashing
         val compressedBytes = compressBitmap(bitmap)
         val imageHash = computeHash(compressedBytes)
+
+        Log.d("FoodScanner", "Sending image file size: ${compressedBytes.size} bytes")
 
         // Check if exact same image is already in cache
         scanResultCache.get(imageHash)?.let { cachedResult ->
@@ -263,7 +266,21 @@ object GeminiFoodService {
                 rawText = rawText.removePrefix("```").removeSuffix("```").trim()
             }
 
-            val parsed = JSONObject(rawText)
+            Log.d("FoodScanner", "API Response received: $rawText")
+
+            val parsed = try {
+                JSONObject(rawText)
+            } catch (e: Exception) {
+                Log.e("FoodScanner", "JSON Parsing failed!", e)
+                null // Make sure this doesn't fallback to a hardcoded Dal Bhat object!
+            }
+
+            if (parsed == null) {
+                throw GeminiAnalysisException(
+                    message = "JSON Parsing failed! Could not parse structured nutrition data from AI response.",
+                    errorType = GeminiErrorType.INVALID_RESPONSE
+                )
+            }
 
             val mealTitle = parsed.optString("meal_title", parsed.optString("mealTitle", "Identified Meal"))
             val uncertaintyNotes = parsed.optString(
@@ -356,8 +373,12 @@ object GeminiFoodService {
             val totalSod = itemsList.map { it.sodium }.sum()
             val avgConf = (itemsList.map { it.confidence }.average()).toFloat()
 
+            val formattedTitle = if (mealTitle.isBlank() || mealTitle == "Identified Meal") {
+                com.example.domain.NutritionEngine.renderMealHeader(itemsList.map { it.foodName })
+            } else mealTitle
+
             return MultiFoodScanResult(
-                mealTitle = mealTitle,
+                mealTitle = formattedTitle,
                 items = itemsList,
                 totalCalories = totalCals,
                 totalProtein = totalP,

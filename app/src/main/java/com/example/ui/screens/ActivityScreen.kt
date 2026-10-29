@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.model.WorkoutSession
+import com.example.ui.components.GpsMapView
+import com.example.ui.components.GpsCoordinate
 import com.example.ui.components.SamsungHealthCard
 import com.example.ui.theme.CalorieGreen
 import com.example.ui.theme.HealthNavy
@@ -275,20 +277,10 @@ fun ActivityScreen(
                             icon = Icons.Default.DirectionsWalk,
                             iconTint = HealthTeal
                         ) {
-                            val hours = elapsedSeconds / 3600
-                            val minutes = (elapsedSeconds % 3600) / 60
-                            val seconds = elapsedSeconds % 60
-                            val timeFormatted = if (hours > 0) {
-                                String.format("%02d:%02d:%02d", hours, minutes, seconds)
-                            } else {
-                                String.format("%02d:%02d", minutes, seconds)
-                            }
-
+                            val timeFormatted = com.example.domain.GpsTrackingEngine.formatTimerDisplay(elapsedSeconds)
                             val distanceKm = trackedDistanceMeters / 1000f
-                            val calories = (elapsedSeconds * 0.08f).toInt() // realistic metabolic burn
-                            val paceMinPerKm = if (distanceKm > 0.05f) {
-                                (elapsedSeconds / 60f) / distanceKm
-                            } else 0f
+                            val calories = com.example.domain.GpsTrackingEngine.calculateCaloriesBurned(distanceKm)
+                            val paceFormatted = com.example.domain.GpsTrackingEngine.formatPace(elapsedSeconds, distanceKm)
 
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -314,10 +306,20 @@ fun ActivityScreen(
                                 ) {
                                     MetricColumn("Distance", String.format("%.2f km", distanceKm))
                                     MetricColumn("Calories", "$calories kcal")
-                                    MetricColumn("Pace", if (paceMinPerKm > 0) String.format("%.1f min/km", paceMinPerKm) else "--")
+                                    MetricColumn("Pace", paceFormatted)
                                 }
                             }
                         }
+                    }
+
+                    // Interactive OpenStreetMap / Leaflet Route Map Preview
+                    item {
+                        GpsMapView(
+                            coordinates = emptyList(),
+                            currentLat = 27.7172,
+                            currentLon = 85.3240,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     // GPS Permission status notice

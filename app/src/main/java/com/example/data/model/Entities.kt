@@ -268,6 +268,20 @@ data class MultiFoodScanResult(
     val isOfflineFallback: Boolean = false
 )
 
+data class MealAnalysis(
+    val mealTitle: String = "Identified Meal",
+    val items: List<RecognizedFoodItem> = emptyList(),
+    val totalCalories: Int = 0,
+    val totalProtein: Float = 0f,
+    val totalCarbs: Float = 0f,
+    val totalFat: Float = 0f,
+    val totalFiber: Float = 0f,
+    val totalSugar: Float = 0f,
+    val totalSodium: Float = 0f,
+    val uncertaintyNotes: String = "",
+    val disclaimer: String = "Nutritional values are AI-estimated approximations and should not replace clinical medical advice. Please confirm portion sizes before logging."
+)
+
 data class NutritionPeriodSummary(
     val periodLabel: String,
     val totalCalories: Int,

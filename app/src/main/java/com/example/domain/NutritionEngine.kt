@@ -167,4 +167,29 @@ object NutritionEngine {
             targetFatGrams = macros.fatGrams
         )
     }
+
+    /**
+     * Cleanly formats a meal header from a list of food component names.
+     * 1. Removes duplicate names using a Set (distinct after trim).
+     * 2. Formats cleanly based on count:
+     *    - 1 item: "Name"
+     *    - 2 items: "Name1, Name2"
+     *    - 3+ items: "Name1, Name2 +N more"
+     */
+    fun renderMealHeader(componentNames: List<String>?): String {
+        if (componentNames.isNullOrEmpty()) return "Scanned Meal"
+
+        val uniqueNames = componentNames
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        if (uniqueNames.isEmpty()) return "Scanned Meal"
+
+        return when {
+            uniqueNames.size == 1 -> uniqueNames[0]
+            uniqueNames.size <= 2 -> uniqueNames.joinToString(", ")
+            else -> "${uniqueNames[0]}, ${uniqueNames[1]} +${uniqueNames.size - 2} more"
+        }
+    }
 }
