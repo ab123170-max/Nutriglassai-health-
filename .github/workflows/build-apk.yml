@@ -59,6 +59,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload APK backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NutriglassAI-debug-APK-Download
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run unit tests
         continue-on-error: true
         run: gradle --no-daemon :app:testDebugUnitTest
