@@ -50,6 +50,39 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
 
     private val repository = HealthRepository(AppDatabase.getDatabase(application))
 
+    private val usdaRepository = com.example.data.network.USDAFoodRepository(application)
+    private val _usdaResults = MutableStateFlow<List<com.example.data.network.USDAFood>>(emptyList())
+    val usdaResults: StateFlow<List<com.example.data.network.USDAFood>> = _usdaResults.asStateFlow()
+    private val _usdaLoading = MutableStateFlow(false)
+    val usdaLoading: StateFlow<Boolean> = _usdaLoading.asStateFlow()
+    private val _usdaError = MutableStateFlow<String?>(null)
+    val usdaError: StateFlow<String?> = _usdaError.asStateFlow()
+
+    fun searchUSDAFoods(query: String) {
+        viewModelScope.launch {
+            _usdaLoading.value = true
+            _usdaError.value = null
+            usdaRepository.search(query)
+                .onSuccess { _usdaResults.value = it }
+                .onFailure { _usdaError.value = it.message ?: "Unable to search USDA foods." }
+            _usdaLoading.value = false
+        }
+    }
+
+    fun logUSDAFood(food: com.example.data.network.USDAFood, grams: Float, mealType: String) {
+        val amount = grams.coerceAtLeast(1f) / 100f
+        logMeal(
+            foodName = food.name, nepaliName = "", mealType = mealType, portionGrams = grams,
+            calories = ((food.calories ?: 0f) * amount).roundToInt(),
+            protein = (food.protein ?: 0f) * amount, carbs = (food.carbs ?: 0f) * amount,
+            fat = (food.fat ?: 0f) * amount, fiber = (food.fiber ?: 0f) * amount,
+            sugar = (food.sugars ?: 0f) * amount, portionDesc = "${grams.toInt()}g • USDA FDC",
+            unit = "g", quantity = grams, sodium = (food.sodiumMg ?: 0f) * amount,
+            estimationMethod = "USDA_FOODDATA_CENTRAL", confidence = 1f
+        )
+    }
+
+
     private val _selectedDate = MutableStateFlow(repository.getTodayString())
     val selectedDate: StateFlow<String> = _selectedDate.asStateFlow()
 
