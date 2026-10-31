@@ -113,9 +113,22 @@ class StandardFoodVisionPipeline(
             val visionItems = mutableListOf<FoodVisionItem>()
             val nutrientList = mutableListOf<NutrientBreakdown>()
 
-            // Empty detection means the photo could not be reliably localized.
-            // Do not invent a full-frame "Main Dish" region.
-            val regions = foodMask.regions
+            // No on-device detector model is bundled yet. Send the full photo to
+            // Gemini Vision for analysis, without claiming a detected food box.
+            val regions = foodMask.regions.ifEmpty {
+                listOf(
+                    FoodRegion(
+                        id = "gemini_full_image_scan",
+                        label = "AI full-image analysis",
+                        boundingBox = BoundingBox(0f, 0f, 1f, 1f, 0f, "ai_scan_frame", "AI scan frame", isFoodItem = false),
+                        relativeAreaFraction = 1f,
+                        boundaryCertainty = 0f
+                    )
+                )
+            }
+            val effectiveFoodMask = if (foodMask.regions.isEmpty()) {
+                foodMask.copy(regions = regions, totalFoodAreaFraction = 1f)
+            } else foodMask
 
             for (region in regions) {
                 coroutineContext.ensureActive()
@@ -137,43 +150,40 @@ class StandardFoodVisionPipeline(
                 } finally {
                     if (regionCrop !== source && !regionCrop.isRecycled) regionCrop.recycle()
                 }
-                val topPred = classificationOutput.topPrediction
-
-                // No prediction is not a food identity. Skip it instead of
-                // manufacturing a generic label and default nutrient profile.
-                if (topPred == null) continue
-                val classId = topPred.classId
-                val englishName = topPred.displayName
-                val nepaliName = topPred.nepaliName
-
-                // STAGE 5: PORTION ESTIMATION
-                val portion = portionEngine.estimatePortion(region, classId)
-
-                // STAGE 6: NUTRITION MAPPING
-                val nutrients = calorieEngine.calculateNutrients(
-                    baseCaloriesPer100g = topPred.caloriesPer100g,
-                    baseProteinPer100g = topPred.proteinPer100g,
-                    baseCarbsPer100g = topPred.carbsPer100g,
-                    baseFatPer100g = topPred.fatPer100g,
-                    baseFiberPer100g = topPred.fiberPer100g,
-                    baseSodiumPer100g = topPred.sodiumPer100g,
-                    portionGrams = portion.estimatedGrams,
-                    cookingMethod = CookingMethod.STEAMED
-                )
-                nutrientList.add(nutrients)
-
-                visionItems.add(
-                    FoodVisionItem(
-                        id = region.id,
-                        label = englishName,
-                        nepaliLabel = nepaliName,
-                        boundingBox = region.boundingBox,
+                // Gemini can return several distinct foods from one meal photo.
+                // Preserve every returned item instead of silently keeping only the first.
+                for (prediction in classificationOutput.predictions) {
+                    val classId = prediction.classId
+                    val portion = portionEngine.estimatePortion(
                         region = region,
-                        topPrediction = topPred,
-                        portionEstimate = portion,
-                        nutrients = nutrients
+                        classId = classId,
+                        userQuantityOverride = prediction.defaultServingGrams,
+                        userUnitOverride = "g"
                     )
-                )
+                    val nutrients = calorieEngine.calculateNutrients(
+                        baseCaloriesPer100g = prediction.caloriesPer100g,
+                        baseProteinPer100g = prediction.proteinPer100g,
+                        baseCarbsPer100g = prediction.carbsPer100g,
+                        baseFatPer100g = prediction.fatPer100g,
+                        baseFiberPer100g = prediction.fiberPer100g,
+                        baseSodiumPer100g = prediction.sodiumPer100g,
+                        portionGrams = portion.estimatedGrams,
+                        cookingMethod = CookingMethod.STEAMED
+                    )
+                    nutrientList.add(nutrients)
+                    visionItems.add(
+                        FoodVisionItem(
+                            id = region.id + "_" + classId,
+                            label = prediction.displayName,
+                            nepaliLabel = prediction.nepaliName,
+                            boundingBox = region.boundingBox,
+                            region = region,
+                            topPrediction = prediction,
+                            portionEstimate = portion,
+                            nutrients = nutrients
+                        )
+                    )
+                }
             }
             stageTimings["classification_portion"] = System.currentTimeMillis() - classStart
 
@@ -185,14 +195,14 @@ class StandardFoodVisionPipeline(
             VisionProcessingResult.Success(
                 data = FoodVisionOutput(
                     detectedObjects = detectedObjects,
-                    foodMask = foodMask,
+                    foodMask = effectiveFoodMask,
                     items = visionItems,
                     totalNutrients = totalNutrients,
                     frameHash = frame.frameHash
                 ),
                 processingDurationMs = duration,
                 stageBreakdown = stageTimings,
-                modelUsed = "NutriGlass-OnDevice-V1.2"
+                modelUsed = "Gemini Vision via NutriGlass secure proxy"
             )
         } catch (e: CancellationException) {
             VisionProcessingResult.Cancelled
