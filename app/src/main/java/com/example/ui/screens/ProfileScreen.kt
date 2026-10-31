@@ -88,6 +88,7 @@ fun ProfileScreen(
     onNavigateToBodyComposition: () -> Unit = {},
     onNavigateToTargetedWeightLoss: () -> Unit = {},
     onNavigateToFasting: () -> Unit = {},
+    onNavigateToCloudBackup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -468,6 +469,26 @@ fun ProfileScreen(
                     ReminderToggleRow("Meal Tracking Reminders", "Breakfast, lunch, and dinner logging prompts", mealReminders) { mealReminders = it }
                     ReminderToggleRow("Hydration Alerts", "Reminders every 2-3 hours to sip water", waterReminders) { waterReminders = it }
                     ReminderToggleRow("Walking Goal Alerts", "Progress notifications toward step goals", stepReminders) { stepReminders = it }
+                }
+            }
+        }
+
+        // Secure cloud backup and multi-device restore
+        item {
+            SamsungHealthCard(
+                title = "Secure Cloud Backup",
+                icon = Icons.Default.CloudSync,
+                iconTint = HealthTeal,
+                headerActionText = "Open",
+                onHeaderActionClick = onNavigateToCloudBackup
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GoalRow("Cloud account", "Supabase Auth")
+                    GoalRow("Backup", "Encrypted transport + private user rows")
+                    GoalRow("Restore", "Move your health data to another phone")
+                    Button(onClick = onNavigateToCloudBackup, modifier = Modifier.fillMaxWidth()) {
+                        Text("Connect Cloud Account")
+                    }
                 }
             }
         }
