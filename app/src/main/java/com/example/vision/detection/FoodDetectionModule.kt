@@ -73,47 +73,10 @@ class ChromaticSaliencyFoodDetector : FoodDetectionEngine {
         frame: FoodFrame,
         config: DetectionConfig
     ): List<DetectedFoodObject> = withContext(Dispatchers.Default) {
-        val bmp = frame.bitmap
-        val width = bmp.width
-        val height = bmp.height
-
-        val rawDetections = mutableListOf<BoundingBox>()
-
-        // 1. Detect plate / serving boundary (central bright/circular cluster)
-        val plateBox = detectServingContainer(bmp)
-        if (plateBox != null) {
-            rawDetections.add(plateBox)
-        }
-
-        // 2. Identify chromatic regions within or around the plate
-        val foodRegions = findChromaticClusters(bmp, plateBox)
-        rawDetections.addAll(foodRegions)
-
-        // 3. Filter non-food classes if configured
-        val filtered = if (config.rejectNonFoodClasses) {
-            rawDetections.filter { detection ->
-                detection.isFoodItem && !nonFoodClasses.contains(detection.className.lowercase())
-            }
-        } else {
-            rawDetections
-        }
-
-        // 4. Filter by confidence threshold
-        val confident = filtered.filter { it.confidence >= config.minConfidenceThreshold }
-
-        // 5. Apply Non-Maximum Suppression (NMS)
-        val nmsBoxes = applyNonMaxSuppression(confident, config.nmsIouThreshold)
-            .take(config.maxDetections)
-
-        // Calculate relative area fractions against plate
-        val plateArea = plateBox?.area?.coerceAtLeast(0.1f) ?: 1.0f
-        nmsBoxes.map { box ->
-            DetectedFoodObject(
-                box = box,
-                isPlateOrContainer = false,
-                relativePlateAreaFraction = (box.area / plateArea).coerceIn(0f, 1f)
-            )
-        }
+        // The previous implementation returned three hard-coded boxes for every
+        // photo. Until a real detector model is installed, return no detections
+        // rather than drawing invented boxes over unrelated objects.
+        emptyList()
     }
 
     /**

@@ -99,25 +99,20 @@ class HybridFoodClassifier : FoodClassificationEngine {
         topK: Int,
         hintCategory: String?
     ): ClassificationOutput = withContext(Dispatchers.Default) {
-        // Prioritize items based on visual match or matching hints
-        val matches = if (!hintCategory.isNullOrBlank()) {
-            taxonomy.sortedByDescending { if (it.category.contains(hintCategory, ignoreCase = true)) 1f else 0f }
-        } else {
-            taxonomy
-        }
-
-        val topPredictions = matches.take(topK.coerceAtLeast(1))
-        val top = topPredictions.firstOrNull()
-
+        // No trained image-classification model is bundled yet. Never infer a food
+        // label from a taxonomy or hint alone: that produced fabricated results.
+        // Phase 2 will connect a real on-device/cloud vision model.
         ClassificationOutput(
-            predictions = topPredictions,
-            topPrediction = top,
-            isConfident = (top?.confidence ?: 0f) >= 0.75f,
+            predictions = emptyList(),
+            topPrediction = null,
+            isConfident = false,
             metadata = ClassificationMetadata(
+                modelName = "NutriGlass-NoModel",
+                modelVersion = "phase-1-honest-fallback",
                 classesSupportedCount = taxonomy.size,
                 topKRequested = topK
             ),
-            unsupportedClassDetected = false
+            unsupportedClassDetected = true
         )
     }
 

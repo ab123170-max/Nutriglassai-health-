@@ -113,40 +113,50 @@ class StandardFoodVisionPipeline(
             val visionItems = mutableListOf<FoodVisionItem>()
             val nutrientList = mutableListOf<NutrientBreakdown>()
 
-            val regions = foodMask.regions.ifEmpty {
-                listOf(
-                    FoodRegion(
-                        label = "Main Dish",
-                        boundingBox = BoundingBox(0.15f, 0.15f, 0.85f, 0.85f, 0.85f, "main", "Main Food")
-                    )
-                )
-            }
+            // Empty detection means the photo could not be reliably localized.
+            // Do not invent a full-frame "Main Dish" region.
+            val regions = foodMask.regions
 
             for (region in regions) {
                 coroutineContext.ensureActive()
                 if (isCancelled) return@withContext VisionProcessingResult.Cancelled
 
-                val classificationOutput = classificationEngine.classifyFood(
-                    regionBitmap = preprocessed.processedBitmap,
-                    topK = 5
+                // Classify the actual detected crop, not the same resized full
+                // photo for every region.
+                val source = frame.bitmap
+                val cropRect = region.boundingBox.toImageCoordinates(source.width, source.height)
+                val left = cropRect.left.toInt().coerceIn(0, source.width - 1)
+                val top = cropRect.top.toInt().coerceIn(0, source.height - 1)
+                val right = cropRect.right.toInt().coerceIn(left + 1, source.width)
+                val bottom = cropRect.bottom.toInt().coerceIn(top + 1, source.height)
+                val regionCrop = android.graphics.Bitmap.createBitmap(
+                    source, left, top, right - left, bottom - top
                 )
+                val classificationOutput = try {
+                    classificationEngine.classifyFood(regionBitmap = regionCrop, topK = 5)
+                } finally {
+                    if (regionCrop !== source && !regionCrop.isRecycled) regionCrop.recycle()
+                }
                 val topPred = classificationOutput.topPrediction
 
-                val classId = topPred?.classId ?: "generic_food"
-                val englishName = topPred?.displayName ?: "Mixed Food"
-                val nepaliName = topPred?.nepaliName ?: ""
+                // No prediction is not a food identity. Skip it instead of
+                // manufacturing a generic label and default nutrient profile.
+                if (topPred == null) continue
+                val classId = topPred.classId
+                val englishName = topPred.displayName
+                val nepaliName = topPred.nepaliName
 
                 // STAGE 5: PORTION ESTIMATION
                 val portion = portionEngine.estimatePortion(region, classId)
 
                 // STAGE 6: NUTRITION MAPPING
                 val nutrients = calorieEngine.calculateNutrients(
-                    baseCaloriesPer100g = topPred?.caloriesPer100g ?: 150f,
-                    baseProteinPer100g = topPred?.proteinPer100g ?: 5.0f,
-                    baseCarbsPer100g = topPred?.carbsPer100g ?: 20.0f,
-                    baseFatPer100g = topPred?.fatPer100g ?: 3.0f,
-                    baseFiberPer100g = topPred?.fiberPer100g,
-                    baseSodiumPer100g = topPred?.sodiumPer100g,
+                    baseCaloriesPer100g = topPred.caloriesPer100g,
+                    baseProteinPer100g = topPred.proteinPer100g,
+                    baseCarbsPer100g = topPred.carbsPer100g,
+                    baseFatPer100g = topPred.fatPer100g,
+                    baseFiberPer100g = topPred.fiberPer100g,
+                    baseSodiumPer100g = topPred.sodiumPer100g,
                     portionGrams = portion.estimatedGrams,
                     cookingMethod = CookingMethod.STEAMED
                 )
