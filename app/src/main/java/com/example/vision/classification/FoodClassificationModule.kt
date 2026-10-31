@@ -1,6 +1,7 @@
 package com.example.vision.classification
 
 import android.graphics.Bitmap
+import com.example.data.network.GeminiFoodService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -98,21 +99,49 @@ class HybridFoodClassifier : FoodClassificationEngine {
         regionBitmap: Bitmap,
         topK: Int,
         hintCategory: String?
-    ): ClassificationOutput = withContext(Dispatchers.Default) {
-        // No trained image-classification model is bundled yet. Never infer a food
-        // label from a taxonomy or hint alone: that produced fabricated results.
-        // Phase 2 will connect a real on-device/cloud vision model.
+    ): ClassificationOutput = withContext(Dispatchers.IO) {
+        require(!regionBitmap.isRecycled) { "Food image is no longer available. Please scan again." }
+        require(regionBitmap.width >= 32 && regionBitmap.height >= 32) { "Food image is too small to analyze. Move closer and scan again." }
+
+        // Send the real image crop to Gemini Vision through the secure proxy.
+        val meal = GeminiFoodService.analyzeFoodImageMulti(regionBitmap, null)
+        val predictions = meal.items
+            .filter { it.foodName.isNotBlank() && it.estimatedGrams > 0f }
+            .map { item ->
+                val grams = item.estimatedGrams.coerceAtLeast(1f)
+                val per100 = 100f / grams
+                TopKPrediction(
+                    classId = item.foodName.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifBlank { "ai_food_item" },
+                    displayName = item.foodName,
+                    nepaliName = item.nepaliName,
+                    confidence = item.confidence.coerceIn(0f, 1f),
+                    category = "Gemini Vision",
+                    defaultServingGrams = grams,
+                    defaultServingUnit = item.unit,
+                    caloriesPer100g = item.calories * per100,
+                    proteinPer100g = item.protein * per100,
+                    carbsPer100g = item.carbs * per100,
+                    fatPer100g = item.fat * per100,
+                    fiberPer100g = item.fiber * per100,
+                    sodiumPer100g = item.sodium * per100,
+                    likelyAllergens = item.allergens
+                )
+            }
+            .sortedByDescending { it.confidence }
+            .take(topK.coerceAtLeast(1))
+        val top = predictions.firstOrNull()
         ClassificationOutput(
-            predictions = emptyList(),
-            topPrediction = null,
-            isConfident = false,
+            predictions = predictions,
+            topPrediction = top,
+            isConfident = (top?.confidence ?: 0f) >= 0.75f,
             metadata = ClassificationMetadata(
-                modelName = "NutriGlass-NoModel",
-                modelVersion = "phase-1-honest-fallback",
-                classesSupportedCount = taxonomy.size,
-                topKRequested = topK
+                modelName = "Gemini Vision Food Analysis",
+                modelVersion = meal.modelUsed,
+                classesSupportedCount = predictions.size,
+                topKRequested = topK,
+                inputResolution = regionBitmap.width.toString() + "x" + regionBitmap.height + " RGB"
             ),
-            unsupportedClassDetected = true
+            unsupportedClassDetected = predictions.isEmpty()
         )
     }
 
