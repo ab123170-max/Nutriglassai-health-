@@ -6,14 +6,21 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.model.FastingHistoryEntity
 import com.example.data.model.FastingProfileEntity
-import com.example.data.model.FastingProgressEntity
 import com.example.data.model.FastingReminderEntity
 import com.example.data.model.FastingScheduleEntity
 import com.example.data.model.FastingSessionEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+data class FastingAnalyticsSummary(
+    val completedSessions: Int = 0,
+    val missedSessions: Int = 0,
+    val consistencyPercentage: Float? = null,
+    val averageDurationHours: Float? = null
+)
 
 class FastingViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).fastingDao()
@@ -36,87 +43,107 @@ class FastingViewModel(application: Application) : AndroidViewModel(application)
     val reminders: StateFlow<List<FastingReminderEntity>> = dao.getRemindersFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val latestProgress: StateFlow<FastingProgressEntity?> = dao.getLatestProgressFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    /**
+     * Calculate the last seven days from actual saved sessions.
+     * Active, paused and cancelled sessions are excluded from the consistency denominator.
+     */
+    val weeklyAnalytics: StateFlow<FastingAnalyticsSummary> = sessions
+        .map { allSessions ->
+            val now = System.currentTimeMillis()
+            val cutoff = now - 7L * 24L * 60L * 60L * 1000L
+            val recent = allSessions.filter { it.startTime in cutoff..now }
+            val completed = recent.filter { it.status.equals("COMPLETED", ignoreCase = true) }
+            val missed = recent.filter { it.status.equals("MISSED", ignoreCase = true) }
+            val counted = completed.size + missed.size
+            val durations = completed.mapNotNull { session ->
+                val minutes = if (session.durationMinutes > 0L) {
+                    session.durationMinutes
+                } else {
+                    val end = session.actualEndTime ?: return@mapNotNull null
+                    ((end - session.startTime) / 60000L).coerceAtLeast(0L)
+                }
+                minutes.takeIf { it > 0L }?.div(60f)
+            }
+
+            FastingAnalyticsSummary(
+                completedSessions = completed.size,
+                missedSessions = missed.size,
+                consistencyPercentage = if (counted > 0) completed.size * 100f / counted else null,
+                averageDurationHours = durations.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FastingAnalyticsSummary())
 
     fun updateProfile(profile: FastingProfileEntity) {
-        viewModelScope.launch {
-            dao.saveProfile(profile)
-        }
+        viewModelScope.launch { dao.saveProfile(profile) }
     }
 
     fun startFasting(protocolId: String, fastingHours: Int) {
         viewModelScope.launch {
+            if (dao.getActiveSession() != null || fastingHours <= 0) return@launch
             val now = System.currentTimeMillis()
             val targetEnd = now + (fastingHours * 3600L * 1000L)
-            val session = FastingSessionEntity(
-                protocolId = protocolId,
-                startTime = now,
-                targetEndTime = targetEnd,
-                status = "ACTIVE"
+            dao.insertSession(
+                FastingSessionEntity(
+                    protocolId = protocolId,
+                    startTime = now,
+                    targetEndTime = targetEnd,
+                    status = "ACTIVE"
+                )
             )
-            dao.insertSession(session)
         }
     }
 
-    fun endFastingSession(sessionId: Long, actualDurationMinutes: Long, hunger: Int, energy: Int, notes: String) {
+    fun endFastingSession(
+        sessionId: Long,
+        actualDurationMinutes: Long,
+        hunger: Int,
+        energy: Int,
+        notes: String
+    ) {
         viewModelScope.launch {
             val session = dao.getActiveSession()
             if (session != null && session.id == sessionId) {
-                val updated = session.copy(
-                    actualEndTime = System.currentTimeMillis(),
-                    durationMinutes = actualDurationMinutes,
-                    status = "COMPLETED",
-                    hungerLevel = hunger,
-                    energyLevel = energy,
-                    notes = notes
+                val endedAt = System.currentTimeMillis()
+                val safeMinutes = actualDurationMinutes.coerceAtLeast(0L)
+                dao.updateSession(
+                    session.copy(
+                        actualEndTime = endedAt,
+                        durationMinutes = safeMinutes,
+                        status = "COMPLETED",
+                        hungerLevel = hunger.coerceIn(1, 10),
+                        energyLevel = energy.coerceIn(1, 10),
+                        notes = notes
+                    )
                 )
-                dao.updateSession(updated)
 
-                // Add to history
-                val historyEntry = FastingHistoryEntity(
-                    dateString = android.text.format.DateFormat.format("yyyy-MM-dd", System.currentTimeMillis()).toString(),
-                    protocolId = session.protocolId,
-                    plannedFastingHours = ((session.targetEndTime - session.startTime) / 3600000).toInt(),
-                    actualFastingHours = actualDurationMinutes / 60f,
-                    status = "COMPLETED",
-                    weightKg = profile.value?.weightKg ?: 70f,
-                    energyFeedback = "Energy: $energy/10, Hunger: $hunger/10"
+                val currentWeight = profile.value?.weightKg?.takeIf { it > 0f } ?: 0f
+                dao.insertHistory(
+                    FastingHistoryEntity(
+                        dateString = android.text.format.DateFormat.format("yyyy-MM-dd", endedAt).toString(),
+                        protocolId = session.protocolId,
+                        plannedFastingHours = ((session.targetEndTime - session.startTime) / 3600000L).toInt(),
+                        actualFastingHours = safeMinutes / 60f,
+                        status = "COMPLETED",
+                        weightKg = currentWeight,
+                        energyFeedback = "Energy: ${energy.coerceIn(1, 10)}/10, Hunger: ${hunger.coerceIn(1, 10)}/10"
+                    )
                 )
-                dao.insertHistory(historyEntry)
             }
         }
     }
 
     fun cancelOrPauseSession(sessionId: Long, newStatus: String) {
         viewModelScope.launch {
+            if (newStatus !in setOf("PAUSED", "CANCELLED", "MISSED")) return@launch
             val session = dao.getActiveSession()
             if (session != null && session.id == sessionId) {
-                val updated = session.copy(status = newStatus)
-                dao.updateSession(updated)
+                dao.updateSession(session.copy(status = newStatus))
             }
         }
     }
 
     fun saveReminder(reminder: FastingReminderEntity) {
-        viewModelScope.launch {
-            dao.saveReminder(reminder)
-        }
-    }
-
-    fun generateWeeklyProgress(weekNum: Int) {
-        viewModelScope.launch {
-            val progress = FastingProgressEntity(
-                weekNumber = weekNum,
-                fastingConsistencyPercentage = 85.0f,
-                averageFastingDurationHours = 16.2f,
-                eatingWindowAdherencePercentage = 90.0f,
-                weightTrendKg = -0.6f,
-                nutritionQualityScore = 8.8f,
-                exercisePerformanceScore = 9.0f,
-                nextWeekRecommendation = "Maintain 16:8 protocol with balanced hydration and high protein intake."
-            )
-            dao.insertProgress(progress)
-        }
+        viewModelScope.launch { dao.saveReminder(reminder) }
     }
 }
