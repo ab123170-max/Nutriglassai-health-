@@ -23,6 +23,8 @@ import com.example.data.model.FastingSessionEntity
 import com.example.data.model.FastingHistoryEntity
 import com.example.data.model.FastingReminderEntity
 import com.example.data.model.FastingProgressEntity
+import com.example.data.model.FoodOntologyEntity
+import com.example.data.model.DetectedFoodEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,7 +61,9 @@ import kotlinx.coroutines.launch
         FastingSessionEntity::class,
         FastingHistoryEntity::class,
         FastingReminderEntity::class,
-        FastingProgressEntity::class
+        FastingProgressEntity::class,
+        FoodOntologyEntity::class,
+        DetectedFoodEntity::class
     ],
     version = 10,
     exportSchema = false
@@ -71,6 +75,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun healthDao(): HealthDao
     abstract fun achievementDao(): AchievementDao
     abstract fun fastingDao(): FastingDao
+    abstract fun foodMappingDao(): FoodMappingDao
 
     companion object {
         @Volatile

@@ -129,12 +129,7 @@ fun ActivityScreen(
         while (isTracking && !isPaused) {
             delay(1000L)
             elapsedSeconds += 1
-            // In absence of hardware movement, simulate gentle walking distance increment if tracking walk
-            if (selectedActivityType.contains("Walk", true)) {
-                trackedDistanceMeters += 1.3f // ~4.7 km/h pace
-            } else if (selectedActivityType.contains("Run", true)) {
-                trackedDistanceMeters += 2.5f // ~9.0 km/h pace
-            }
+            // Real GPS tracking will be implemented in a Foreground Service
         }
     }
 

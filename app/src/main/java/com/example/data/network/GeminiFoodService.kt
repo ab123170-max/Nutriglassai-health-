@@ -134,9 +134,9 @@ object GeminiFoodService {
                     if (e.errorType == GeminiErrorType.MODEL_UNAVAILABLE && model != candidateModels.last()) {
                         continue
                     }
-                    throw e
+                    // Do not break the loop to allow trying other models or falling through to error
                 } catch (e: IOException) {
-                    throw GeminiAnalysisException(
+                    lastException = GeminiAnalysisException(
                         message = "Network timeout communicating directly with Gemini API. Check your internet connection.",
                         errorType = GeminiErrorType.NETWORK_ERROR,
                         cause = e

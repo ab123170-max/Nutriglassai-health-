@@ -344,4 +344,27 @@ object ImagePreparationModule {
             null
         }
     }
+    /**
+     * Applies simple thresholding to binarize an image for OCR.
+     */
+    fun binarizeBitmap(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val binarized = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(binarized)
+        val paint = android.graphics.Paint()
+        val colorMatrix = android.graphics.ColorMatrix()
+        colorMatrix.setSaturation(0f) // Grayscale
+        // Contrast enhancement and threshold-like adjustment
+        val cm = android.graphics.ColorMatrix(floatArrayOf(
+            2f, 0f, 0f, 0f, -128f,
+            0f, 2f, 0f, 0f, -128f,
+            0f, 0f, 2f, 0f, -128f,
+            0f, 0f, 0f, 1f, 0f
+        ))
+        colorMatrix.postConcat(cm)
+        paint.colorFilter = android.graphics.ColorMatrixColorFilter(colorMatrix)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        return binarized
+    }
 }
