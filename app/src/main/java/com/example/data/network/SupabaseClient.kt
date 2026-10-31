@@ -1,5 +1,6 @@
 package com.example.data.network
 
+import android.content.Context
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,8 +39,74 @@ object SupabaseClient {
         return builder
     }
 
-    suspend fun signUp(email: String, password: String): JSONObject = auth("signup", email, password)
-    suspend fun signIn(email: String, password: String): JSONObject = auth("token?grant_type=password", email, password)
+    private const val PREFS = "nutriglass_supabase_session"
+    private const val ACCESS_TOKEN = "access_token"
+    private const val REFRESH_TOKEN = "refresh_token"
+
+    fun hasSession(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(ACCESS_TOKEN, null).orEmpty().isNotBlank()
+
+    fun currentAccessToken(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(ACCESS_TOKEN, "").orEmpty()
+
+    fun signOut(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun persistSession(context: Context, response: JSONObject) {
+        val access = response.optString("access_token")
+        if (access.isNotBlank()) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(ACCESS_TOKEN, access)
+                .putString(REFRESH_TOKEN, response.optString("refresh_token"))
+                .apply()
+        }
+    }
+
+    suspend fun signUp(context: Context, email: String, password: String): JSONObject {
+        val response = auth("signup", email, password)
+        persistSession(context, response)
+        return response
+    }
+
+    suspend fun signIn(context: Context, email: String, password: String): JSONObject {
+        val response = auth("token?grant_type=password", email, password)
+        persistSession(context, response)
+        return response
+    }
+
+    suspend fun refreshSession(context: Context): Boolean = withContext(Dispatchers.IO) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val refresh = prefs.getString(REFRESH_TOKEN, null).orEmpty()
+        if (refresh.isBlank()) return@withContext false
+        val body = JSONObject().put("refresh_token", refresh).toString()
+            .toRequestBody("application/json".toMediaType())
+        val response = http.newCall(request("auth/v1/token?grant_type=refresh_token").post(body).build()).execute()
+        val text = response.body?.string().orEmpty()
+        if (!response.isSuccessful) {
+            signOut(context)
+            return@withContext false
+        }
+        persistSession(context, JSONObject(text))
+        true
+    }
+
+    suspend fun validAccessToken(context: Context): String {
+        var token = currentAccessToken(context)
+        if (token.isBlank()) throw IOException("Please sign in to your NutriGlass cloud account.")
+        try {
+            val parts = token.split(".")
+            if (parts.size == 3) {
+                val payload = String(android.util.Base64.decode(parts[1].replace('-', '+').replace('_', '/'), android.util.Base64.DEFAULT))
+                val expiry = JSONObject(payload).optLong("exp", 0L)
+                if (expiry > 0 && expiry < System.currentTimeMillis() / 1000L + 120L) {
+                    refreshSession(context)
+                    token = currentAccessToken(context)
+                }
+            }
+        } catch (_: Exception) { }
+        return token
+    }
 
     private suspend fun auth(endpoint: String, email: String, password: String): JSONObject =
         withContext(Dispatchers.IO) {
