@@ -9,7 +9,8 @@ data class FastingProfileEntity(
     val age: Int = 30,
     val biologicalSex: String = "Not Specified",
     val heightCm: Float = 170.0f,
-    val weightKg: Float = 70.0f,
+    // Zero means the user has not supplied a verified weight yet.
+    val weightKg: Float = 0f,
     val activityLevel: String = "Moderate",
     val dietaryPreferences: String = "Balanced",
     val hasMedicalLimitations: Boolean = false,
