@@ -1,29 +1,27 @@
 # Public food dataset sources for NutriGlass AI
 
-This project can bootstrap its food dataset without asking the app owner to upload photos. The sources below are public; they are not all equivalent and must not be mixed blindly.
+This catalog records public sources that can reduce manual collection. They are separate datasets with different label formats and must not be blindly combined.
 
-## 1. Nepali Food Image Dataset 13 (primary local-food source)
+## 1. Nepali Food Image Dataset 13 — local-food detection
 - Project: https://universe.roboflow.com/sajha-samadhan/nepali-food-image-dataset-13
-- Reported size: 1,999 images; 14 classes.
-- Classes include: bara, chatpate, dal_bhat, dhido, ghonghi, gundruk, juju_dhau, momo, phulaura, samosa, sel_roti, thukpa, yomari.
-- License shown on the project page: CC BY 4.0.
-- Use: local-food detection bootstrap. Preserve attribution and the source license. Verify the downloadable version's labels and license before training or redistribution.
+- Roboflow page reports 1,999 images and 14 classes; its visible class list includes bara, chatpate, dal_bhat, dhido, ghonghi, gundruk, juju_dhau, momo, phulaura, samosa, sel_roti, thukpa and yomari.
+- License shown: CC BY 4.0. Attribute the creator and preserve license terms.
+- Important: the currently listed downloadable version reports only 147 images, with 47 train and 100 test and no validation split. Verify the export before relying on the larger overview count.
 
-## 2. Indian Foods image dataset (CC0)
+## 2. Indian Foods image dataset — classification only
 - Dataset: https://huggingface.co/datasets/bharat-raghunathan/indian-foods-dataset
-- Reported size: 4,770 images across train/test, 15 classes.
-- Includes: biryani, dal, pakora, panipuri, samosa and other Indian dishes.
-- Dataset card declares CC0-1.0.
-- Use: classification support for overlapping dishes. It is not a substitute for Nepali-specific examples or multi-dish bounding boxes.
+- Hugging Face currently reports CC0-1.0 and parquet image data.
+- Use for classification of overlapping dishes (for example biryani, dal, pakora, samosa, panipuri where present), after inspecting its actual label list.
+- This is not a detection dataset: do not invent object bounding boxes from whole-image labels.
 
-## 3. SOHL multi-dish Indian food detection dataset
-- Dataset: https://huggingface.co/datasets/devmka/sohl-multidish-yolo-dataset
-- Reported size: 377 annotated images, 16 classes, YOLO format.
-- Use: research/evaluation candidate for multi-dish plates. Confirm the dataset's license and terms before commercial use; do not include it in commercial training until verified.
+## 3. SOHL Multi-Dish Indian Food Detection — multi-item detection
+- Dataset: https://huggingface.co/datasets/SohlHealth/sohl-multidish-yolo-dataset
+- Dataset card reports 377 images, 377 YOLO annotation files, 16 broad classes, and MIT license.
+- Use as a separate general Indian-food detection source. Its broad categories (curry, rice, snack, etc.) must not be relabeled as specific Nepali foods without verified annotation.
 
-## Important limitations
-- These datasets do not cover every NutriGlass class. Momo varieties, panipuri, chatpate, thukpa and dal-bhat need balanced examples from the appropriate sources.
-- Image classification labels do not provide bounding boxes. Do not convert a whole-image class label into a fabricated detection box.
-- Public web availability does not automatically grant commercial reuse. Keep source, license, attribution and dataset version in the manifest.
-- Do not train or ship a model until dataset validation, class balance, duplicate removal and a held-out test set are complete.
-- No model weights are included by this source catalog.
+## Important limitations and safeguards
+- These sources do not provide complete balanced coverage for all NutriGlass classes or all Nepalese recipes.
+- Keep source, version, license, attribution, and original labels in the dataset manifest.
+- Remove duplicates and inspect class distribution; split by image/source group to avoid train/test leakage.
+- Keep source datasets separate until label mappings are reviewed. Never convert a generic class into a specific dish label by guessing.
+- No NutriGlass model weights are included or trained by this catalog. Training and on-device inference still require validation and export work.
