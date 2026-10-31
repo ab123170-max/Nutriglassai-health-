@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.FastingViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,7 +22,7 @@ fun FastingAnalyticsScreen(
     viewModel: FastingViewModel,
     onNavigateBack: () -> Unit
 ) {
-    val progress by viewModel.latestProgress.collectAsState()
+    val analytics by viewModel.weeklyAnalytics.collectAsState()
 
     Scaffold(
         topBar = {
@@ -49,18 +50,34 @@ fun FastingAnalyticsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(text = "Fasting Progress & Consistency", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(text = "Consistency: ${progress?.fastingConsistencyPercentage ?: 85.0f}%", fontSize = 14.sp)
-                        Text(text = "Average Duration: ${progress?.averageFastingDurationHours ?: 16.0f}h", fontSize = 14.sp)
-                        Text(text = "Weight Trend: ${progress?.weightTrendKg ?: -0.5f} kg", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { viewModel.generateWeeklyProgress(1) },
-                            modifier = Modifier.fillMaxWidth().testTag("generate_weekly_report_btn")
-                        ) {
-                            Text("Generate Weekly Fasting Report")
-                        }
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Last 7 Days — Actual Sessions",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = analytics.consistencyPercentage?.let {
+                                "Consistency: ${String.format(Locale.getDefault(), "%.1f", it)}%"
+                            } ?: "Consistency: Not enough session data yet",
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = analytics.averageDurationHours?.let {
+                                "Average completed fast: ${String.format(Locale.getDefault(), "%.1f", it)} hours"
+                            } ?: "Average completed fast: No completed sessions yet",
+                            fontSize = 14.sp
+                        )
+                        Text("Completed sessions: ${analytics.completedSessions}", fontSize = 14.sp)
+                        Text("Missed sessions: ${analytics.missedSessions}", fontSize = 14.sp)
+                        Text(
+                            text = "Weight trend: Track verified weight check-ins in Progress. Fasting sessions alone cannot determine weight change.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
