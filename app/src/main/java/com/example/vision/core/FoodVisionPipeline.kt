@@ -150,43 +150,40 @@ class StandardFoodVisionPipeline(
                 } finally {
                     if (regionCrop !== source && !regionCrop.isRecycled) regionCrop.recycle()
                 }
-                val topPred = classificationOutput.topPrediction
-
-                // No prediction is not a food identity. Skip it instead of
-                // manufacturing a generic label and default nutrient profile.
-                if (topPred == null) continue
-                val classId = topPred.classId
-                val englishName = topPred.displayName
-                val nepaliName = topPred.nepaliName
-
-                // STAGE 5: PORTION ESTIMATION
-                val portion = portionEngine.estimatePortion(region, classId)
-
-                // STAGE 6: NUTRITION MAPPING
-                val nutrients = calorieEngine.calculateNutrients(
-                    baseCaloriesPer100g = topPred.caloriesPer100g,
-                    baseProteinPer100g = topPred.proteinPer100g,
-                    baseCarbsPer100g = topPred.carbsPer100g,
-                    baseFatPer100g = topPred.fatPer100g,
-                    baseFiberPer100g = topPred.fiberPer100g,
-                    baseSodiumPer100g = topPred.sodiumPer100g,
-                    portionGrams = portion.estimatedGrams,
-                    cookingMethod = CookingMethod.STEAMED
-                )
-                nutrientList.add(nutrients)
-
-                visionItems.add(
-                    FoodVisionItem(
-                        id = region.id,
-                        label = englishName,
-                        nepaliLabel = nepaliName,
-                        boundingBox = region.boundingBox,
+                // Gemini can return several distinct foods from one meal photo.
+                // Preserve every returned item instead of silently keeping only the first.
+                for (prediction in classificationOutput.predictions) {
+                    val classId = prediction.classId
+                    val portion = portionEngine.estimatePortion(
                         region = region,
-                        topPrediction = topPred,
-                        portionEstimate = portion,
-                        nutrients = nutrients
+                        classId = classId,
+                        userQuantityOverride = prediction.defaultServingGrams,
+                        userUnitOverride = "g"
                     )
-                )
+                    val nutrients = calorieEngine.calculateNutrients(
+                        baseCaloriesPer100g = prediction.caloriesPer100g,
+                        baseProteinPer100g = prediction.proteinPer100g,
+                        baseCarbsPer100g = prediction.carbsPer100g,
+                        baseFatPer100g = prediction.fatPer100g,
+                        baseFiberPer100g = prediction.fiberPer100g,
+                        baseSodiumPer100g = prediction.sodiumPer100g,
+                        portionGrams = portion.estimatedGrams,
+                        cookingMethod = CookingMethod.STEAMED
+                    )
+                    nutrientList.add(nutrients)
+                    visionItems.add(
+                        FoodVisionItem(
+                            id = region.id + "_" + classId,
+                            label = prediction.displayName,
+                            nepaliLabel = prediction.nepaliName,
+                            boundingBox = region.boundingBox,
+                            region = region,
+                            topPrediction = prediction,
+                            portionEstimate = portion,
+                            nutrients = nutrients
+                        )
+                    )
+                }
             }
             stageTimings["classification_portion"] = System.currentTimeMillis() - classStart
 
