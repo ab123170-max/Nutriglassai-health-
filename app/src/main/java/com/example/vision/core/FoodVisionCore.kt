@@ -1,5 +1,6 @@
 package com.example.vision.core
 
+import android.content.Context
 import com.example.data.network.GeminiConfig
 import com.example.data.network.GeminiFoodService
 import kotlinx.coroutines.CancellationException
@@ -21,6 +22,11 @@ enum class VisionProcessingMode {
 class FoodVisionCore(
     private val onDevicePipeline: FoodImageProcessor = StandardFoodVisionPipeline()
 ) {
+    companion object {
+        /** Create the production pipeline using the optional bundled TFLite food detector. */
+        fun withTfliteModel(context: Context): FoodVisionCore =
+            FoodVisionCore(StandardFoodVisionPipeline.withTfliteModel(context.applicationContext))
+    }
     private val _currentStage = MutableStateFlow(VisionProcessingStage.IDLE)
     val currentStage: StateFlow<VisionProcessingStage> = _currentStage.asStateFlow()
 

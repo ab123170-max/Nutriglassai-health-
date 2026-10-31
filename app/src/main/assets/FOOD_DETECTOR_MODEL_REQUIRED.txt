@@ -1,0 +1,27 @@
+NutriGlass AI food detector model asset
+
+The Android TFLite adapter expects this exact file:
+  food_detector.tflite
+
+Place the trained model at:
+  app/src/main/assets/food_detector.tflite
+
+Model requirements:
+- TensorFlow Lite Task Library ObjectDetector-compatible model.
+- Embedded Task Library metadata and a food label map.
+- Input image tensor supported by TensorImage.
+- Output boxes, classes and confidence scores supported by ObjectDetector.
+- Labels should include target foods. A generic COCO detector will not reliably
+  identify Nepali dishes such as dal bhat, momo, chatpate, panipuri, thukpa,
+  sel roti, dhido, achar or local curries.
+
+No dummy model is included. Until a trained compatible model is supplied,
+TfliteFoodDetectionEngine reports no boxes and the existing Gemini full-image
+analysis path remains available. Do not display fake bounding boxes.
+
+Suggested dataset:
+- Collect consented, correctly labelled images under varied lighting, angles,
+  plates, bowls, portions and backgrounds.
+- Split train/validation/test by source/meal session to reduce leakage.
+- Include non-food examples and mixed-dish examples.
+- Evaluate per-class precision/recall and mAP before shipping.

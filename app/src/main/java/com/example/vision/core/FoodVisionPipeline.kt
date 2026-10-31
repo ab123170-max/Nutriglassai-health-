@@ -15,6 +15,7 @@ import com.example.vision.detection.FoodMask
 import com.example.vision.detection.FoodRegion
 import com.example.vision.detection.FoodSegmentationEngine
 import com.example.vision.detection.SalienceAndContourFoodSegmenter
+import com.example.vision.detection.TfliteFoodDetectionEngine
 import com.example.vision.portion.PortionEstimate
 import com.example.vision.portion.PortionEstimationEngine
 import com.example.vision.portion.StandardPortionEstimator
@@ -65,6 +66,14 @@ class StandardFoodVisionPipeline(
     private val portionEngine: PortionEstimationEngine = StandardPortionEstimator(),
     private val calorieEngine: CalorieCalculationEngine = StandardCalorieCalculationEngine()
 ) : FoodImageProcessor {
+
+    /** Use this factory from an Android Context to enable the bundled TFLite detector. */
+    companion object {
+        fun withTfliteModel(context: Context): StandardFoodVisionPipeline =
+            StandardFoodVisionPipeline(
+                detectionEngine = TfliteFoodDetectionEngine(context.applicationContext)
+            )
+    }
 
     @Volatile
     private var isCancelled = false
@@ -228,5 +237,6 @@ class StandardFoodVisionPipeline(
 
     override fun release() {
         isCancelled = true
+        detectionEngine.release()
     }
 }
