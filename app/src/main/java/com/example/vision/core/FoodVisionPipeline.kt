@@ -237,6 +237,6 @@ class StandardFoodVisionPipeline(
 
     override fun release() {
         isCancelled = true
-        (detectionEngine as? TfliteFoodDetectionEngine)?.release()
+        detectionEngine.release()
     }
 }
