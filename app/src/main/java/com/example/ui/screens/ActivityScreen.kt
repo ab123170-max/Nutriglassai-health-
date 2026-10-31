@@ -49,6 +49,8 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -78,6 +80,11 @@ import com.example.ui.theme.ProteinBlue
 import com.example.ui.theme.WorkoutOrange
 import com.example.ui.viewmodel.HealthViewModel
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.Priority
+import android.os.Looper
 import kotlinx.coroutines.delay
 
 data class WorkoutPlan(
@@ -109,6 +116,8 @@ fun ActivityScreen(
     var trackedDistanceMeters by remember { mutableStateOf(0f) }
     var selectedActivityType by remember { mutableStateOf("Outdoor Walk") }
     var lastKnownLocation by remember { mutableStateOf<Location?>(null) }
+    val routeCoordinates = remember { mutableStateListOf<GpsCoordinate>() }
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     // Location Permission
     var hasLocationPermission by remember {
@@ -122,6 +131,49 @@ fun ActivityScreen(
     ) { permissions ->
         hasLocationPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    }
+
+    val gpsCallback = remember {
+        object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                if (!isTracking || isPaused) return
+                result.locations.forEach { location ->
+                    // Only accept accurate GPS fixes. Do not fabricate route or distance.
+                    if (location.hasAccuracy() && location.accuracy <= 25f) {
+                        val previous = lastKnownLocation
+                        if (previous == null) {
+                            lastKnownLocation = location
+                            routeCoordinates.add(GpsCoordinate(location.latitude, location.longitude))
+                        } else {
+                            val segment = previous.distanceTo(location)
+                            if (segment >= 4f && segment <= 100f) {
+                                trackedDistanceMeters += segment
+                                lastKnownLocation = location
+                                routeCoordinates.add(GpsCoordinate(location.latitude, location.longitude))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(isTracking, isPaused, hasLocationPermission) {
+        if (isTracking && !isPaused && hasLocationPermission) {
+            try {
+                val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
+                    .setMinUpdateDistanceMeters(3f)
+                    .build()
+                fusedLocationClient.requestLocationUpdates(request, gpsCallback, Looper.getMainLooper())
+            } catch (_: SecurityException) {
+                hasLocationPermission = false
+            }
+        } else {
+            fusedLocationClient.removeLocationUpdates(gpsCallback)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { fusedLocationClient.removeLocationUpdates(gpsCallback) }
     }
 
     // Timer ticker
@@ -310,9 +362,9 @@ fun ActivityScreen(
                     // Interactive OpenStreetMap / Leaflet Route Map Preview
                     item {
                         GpsMapView(
-                            coordinates = emptyList(),
-                            currentLat = 27.7172,
-                            currentLon = 85.3240,
+                            coordinates = routeCoordinates.toList(),
+                            currentLat = lastKnownLocation?.latitude,
+                            currentLon = lastKnownLocation?.longitude,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -358,10 +410,18 @@ fun ActivityScreen(
                                 // Start Session Button
                                 Button(
                                     onClick = {
-                                        isTracking = true
-                                        isPaused = false
-                                        elapsedSeconds = 0L
-                                        trackedDistanceMeters = 0f
+                                        if (!hasLocationPermission) {
+                                            locationPermissionLauncher.launch(
+                                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                                            )
+                                        } else {
+                                            isTracking = true
+                                            isPaused = false
+                                            elapsedSeconds = 0L
+                                            trackedDistanceMeters = 0f
+                                            lastKnownLocation = null
+                                            routeCoordinates.clear()
+                                        }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = HealthTeal),
                                     modifier = Modifier
