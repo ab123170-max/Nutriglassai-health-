@@ -50,6 +50,7 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.MeasurementUnitsScreen
 import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.ProfileScreen
+import com.example.ui.screens.CloudBackupScreen
 import com.example.ui.screens.ProgressScreen
 import com.example.ui.screens.ScannerScreen
 import com.example.ui.theme.HealthNavy
@@ -92,6 +93,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object FastingNutrition : Screen("fasting_nutrition", "Nutrition", Icons.Default.Restaurant)
     object FastingAnalytics : Screen("fasting_analytics", "Analytics", Icons.Default.Assessment)
     object FastingSafety : Screen("fasting_safety", "Safety", Icons.Default.Assessment)
+    object CloudBackup : Screen("cloud_backup", "Cloud Backup", Icons.Default.CloudSync)
 }
 
 class MainActivity : ComponentActivity() {
@@ -215,6 +217,7 @@ fun NutriGlassApp(
                 )
                 Screen.Profile -> ProfileScreen(
                     viewModel = viewModel,
+                    onNavigateToCloudBackup = { currentScreen = Screen.CloudBackup },
                     onNavigateToMeasurementUnits = { currentScreen = Screen.MeasurementUnits },
                     onNavigateToMonthlyReport = { currentScreen = Screen.MonthlyReport },
                     onNavigateToWalkAndLearn = { currentScreen = Screen.WalkAndLearn },
@@ -223,6 +226,10 @@ fun NutriGlassApp(
                     onNavigateToBodyComposition = { currentScreen = Screen.BodyComposition },
                     onNavigateToTargetedWeightLoss = { currentScreen = Screen.TargetedWeightLoss },
                     onNavigateToFasting = { currentScreen = Screen.FastingDashboard }
+                )
+                Screen.CloudBackup -> CloudBackupScreen(
+                    viewModel = viewModel,
+                    onBack = { currentScreen = Screen.Profile }
                 )
                 Screen.MeasurementUnits -> MeasurementUnitsScreen(
                     viewModel = viewModel,
