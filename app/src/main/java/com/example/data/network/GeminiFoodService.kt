@@ -99,8 +99,9 @@ object GeminiFoodService {
         try {
             Log.d("FoodScanner", "Attempting food analysis via backend proxy (${GeminiConfig.PROXY_URL})...")
             val proxyResult = executeProxyCall(requestJson, imageUriString, prepared.byteCount, prepared.mimeType)
-            scanResultCache.put(imageHash, proxyResult)
-            return@withContext proxyResult
+            val verifiedResult = verifyMealWithUsda(proxyResult)
+            scanResultCache.put(imageHash, verifiedResult)
+            return@withContext verifiedResult
         } catch (e: GeminiAnalysisException) {
             Log.w("FoodScanner", "Proxy attempt returned [${e.errorType}] (HTTP ${e.httpCode}): ${e.message}")
             lastException = e
@@ -126,9 +127,10 @@ object GeminiFoodService {
                 try {
                     Log.d("FoodScanner", "Attempting direct Google Generative AI with model $model...")
                     val result = executeDirectCall(model, directKey, requestJson, imageUriString, prepared.byteCount, prepared.mimeType)
-                    scanResultCache.put(imageHash, result)
+                    val verifiedResult = verifyMealWithUsda(result)
+                    scanResultCache.put(imageHash, verifiedResult)
                     GeminiConfig.activeModel = model
-                    return@withContext result
+                    return@withContext verifiedResult
                 } catch (e: GeminiAnalysisException) {
                     lastException = e
                     if (e.errorType == GeminiErrorType.MODEL_UNAVAILABLE && model != candidateModels.last()) {
@@ -148,6 +150,21 @@ object GeminiFoodService {
         throw lastException ?: GeminiAnalysisException(
             message = "AI service could not analyze this photo. Check connection and try again.",
             errorType = GeminiErrorType.INVALID_RESPONSE
+        )
+    }
+
+    /** Cross-check recognized items against USDA when an API key is configured. */
+    private suspend fun verifyMealWithUsda(result: MultiFoodScanResult): MultiFoodScanResult {
+        val verifiedItems = FoodVerificationService.verifyWithUsda(result.items)
+        return result.copy(
+            items = verifiedItems,
+            totalCalories = verifiedItems.sumOf { it.calories },
+            totalProtein = verifiedItems.sumOf { it.protein.toDouble() }.toFloat(),
+            totalCarbs = verifiedItems.sumOf { it.carbs.toDouble() }.toFloat(),
+            totalFat = verifiedItems.sumOf { it.fat.toDouble() }.toFloat(),
+            totalFiber = verifiedItems.sumOf { it.fiber.toDouble() }.toFloat(),
+            totalSugar = verifiedItems.sumOf { it.sugar.toDouble() }.toFloat(),
+            totalSodium = verifiedItems.sumOf { it.sodium.toDouble() }.toFloat()
         )
     }
 
