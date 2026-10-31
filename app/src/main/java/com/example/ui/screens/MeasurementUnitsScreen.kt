@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,6 +66,7 @@ import com.example.ui.theme.WaterCyan
 import com.example.ui.theme.WorkoutOrange
 import com.example.ui.viewmodel.HealthViewModel
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MeasurementUnitsScreen(
     viewModel: HealthViewModel,
@@ -79,6 +82,34 @@ fun MeasurementUnitsScreen(
     var selectedDistanceUnit by remember(prefs) { mutableStateOf(prefs.distanceUnit) }
     var glassSizeInput by remember(prefs) { mutableStateOf(prefs.usualGlassSizeMl.toString()) }
     var bottleSizeInput by remember(prefs) { mutableStateOf(prefs.usualBottleSizeMl.toString()) }
+
+    val applyMetricUnits = {
+        val next = prefs.copy(weightUnit = "kg", heightUnit = "cm", foodUnit = "g", waterUnit = "ml", distanceUnit = "km")
+        selectedWeightUnit = next.weightUnit
+        selectedHeightUnit = next.heightUnit
+        selectedFoodUnit = next.foodUnit
+        selectedWaterUnit = next.waterUnit
+        selectedDistanceUnit = next.distanceUnit
+        viewModel.saveMeasurementPreferences(next)
+    }
+    val applyUsCustomaryUnits = {
+        val next = prefs.copy(weightUnit = "lb", heightUnit = "ft_in", foodUnit = "oz", waterUnit = "fl_oz", distanceUnit = "mi")
+        selectedWeightUnit = next.weightUnit
+        selectedHeightUnit = next.heightUnit
+        selectedFoodUnit = next.foodUnit
+        selectedWaterUnit = next.waterUnit
+        selectedDistanceUnit = next.distanceUnit
+        viewModel.saveMeasurementPreferences(next)
+    }
+    val applyUkImperialUnits = {
+        val next = prefs.copy(weightUnit = "st", heightUnit = "ft_in", foodUnit = "oz", waterUnit = "fl_oz", distanceUnit = "mi")
+        selectedWeightUnit = next.weightUnit
+        selectedHeightUnit = next.heightUnit
+        selectedFoodUnit = next.foodUnit
+        selectedWaterUnit = next.waterUnit
+        selectedDistanceUnit = next.distanceUnit
+        viewModel.saveMeasurementPreferences(next)
+    }
 
     Column(
         modifier = modifier
@@ -116,6 +147,46 @@ fun MeasurementUnitsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                SamsungHealthCard(
+                    title = "Measurement System Presets",
+                    icon = Icons.Default.Refresh,
+                    iconTint = HealthTeal
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Choose a complete system, or customise each category below. Your saved measurements stay in standard internal units so calculations remain consistent.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedWeightUnit == "kg" && selectedHeightUnit == "cm" && selectedFoodUnit == "g" && selectedWaterUnit == "ml" && selectedDistanceUnit == "km",
+                                onClick = { applyMetricUnits() },
+                                label = { Text("Metric · kg / cm / km") },
+                                modifier = Modifier.testTag("unit_preset_metric")
+                            )
+                            FilterChip(
+                                selected = selectedWeightUnit == "lb" && selectedHeightUnit == "ft_in" && selectedFoodUnit == "oz" && selectedWaterUnit == "fl_oz" && selectedDistanceUnit == "mi",
+                                onClick = { applyUsCustomaryUnits() },
+                                label = { Text("US customary") },
+                                modifier = Modifier.testTag("unit_preset_us")
+                            )
+                            FilterChip(
+                                selected = selectedWeightUnit == "st" && selectedHeightUnit == "ft_in" && selectedFoodUnit == "oz" && selectedWaterUnit == "fl_oz" && selectedDistanceUnit == "mi",
+                                onClick = { applyUkImperialUnits() },
+                                label = { Text("UK imperial") },
+                                modifier = Modifier.testTag("unit_preset_uk")
+                            )
+                        }
+                    }
+                }
+            }
+
             // Weight Units Card
             item {
                 SamsungHealthCard(
@@ -129,9 +200,10 @@ fun MeasurementUnitsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
                                 WeightUnit.KG,
@@ -167,9 +239,10 @@ fun MeasurementUnitsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
                                 HeightUnit.CM,
@@ -205,25 +278,19 @@ fun MeasurementUnitsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            listOf(
-                                FoodUnit.G to "Grams (g)",
-                                FoodUnit.OZ to "Ounces (oz)",
-                                FoodUnit.SERVING to "Serving",
-                                FoodUnit.BOWL to "Bowl",
-                                FoodUnit.PLATE to "Plate",
-                                FoodUnit.CUP to "Cup"
-                            ).forEach { (fUnit, label) ->
+                            FoodUnit.entries.forEach { fUnit ->
                                 FilterChip(
                                     selected = selectedFoodUnit == fUnit.symbol,
                                     onClick = {
                                         selectedFoodUnit = fUnit.symbol
                                         viewModel.saveMeasurementPreferences(prefs.copy(foodUnit = fUnit.symbol))
                                     },
-                                    label = { Text(label, fontSize = 10.sp) },
+                                    label = { Text(fUnit.displayName, fontSize = 10.sp) },
                                     modifier = Modifier.testTag("unit_food_${fUnit.symbol}")
                                 )
                             }
@@ -245,14 +312,16 @@ fun MeasurementUnitsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
                                 WaterUnit.ML,
                                 WaterUnit.L,
                                 WaterUnit.FL_OZ,
+                                WaterUnit.CUP,
                                 WaterUnit.GLASS,
                                 WaterUnit.BOTTLE
                             ).forEach { wUnit ->
@@ -313,9 +382,10 @@ fun MeasurementUnitsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(
                                 DistanceUnit.KM,
