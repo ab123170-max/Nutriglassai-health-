@@ -1,0 +1,73 @@
+name: Prepare public food datasets
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_classification:
+        description: "Also download the CC0 Indian-food classification dataset (about 689 MB)"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-food-datasets
+  cancel-in-progress: false
+
+jobs:
+  download-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: feature/food-dataset-public-sources
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dataset tools
+        run: python -m pip install --upgrade pip datasets huggingface_hub pillow
+
+      - name: Download SOHL YOLO detection dataset
+        run: python food-dataset/download_sohl_yolo.py
+
+      - name: Download CC0 food classification dataset
+        if: inputs.include_classification
+        run: python food-dataset/download_public_sources.py
+
+      - name: Audit downloaded files and create manifest
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          root = Path("food-dataset/raw")
+          report = {"datasets": [], "warning": "Downloaded data is staged for inspection only; no model is trained or shipped by this workflow."}
+          for folder in sorted(p for p in root.iterdir() if p.is_dir()):
+              files = [p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}]
+              labels = [p for p in folder.rglob("*.txt") if p.name not in {"README.txt", "LICENSE.txt"}]
+              report["datasets"].append({
+                  "folder": str(folder),
+                  "image_count": len(files),
+                  "text_label_file_count": len(labels),
+                  "sample_files": [str(p) for p in files[:5]]
+              })
+          Path("food-dataset/raw/DOWNLOAD_AUDIT.json").write_text(json.dumps(report, indent=2))
+          print(json.dumps(report, indent=2))
+          if not report["datasets"] or not any(x["image_count"] for x in report["datasets"]):
+              raise SystemExit("No image files were downloaded; inspect dataset access or downloader.")
+          PY
+
+      - name: Upload dataset bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: nutriglass-public-food-datasets
+          path: food-dataset/raw/
+          if-no-files-found: error
+          retention-days: 7
