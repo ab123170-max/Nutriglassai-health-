@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -602,5 +603,420 @@ class ExampleRobolectricTest {
     val parsed = com.example.data.network.GeminiFoodService.parseErrorMessage(sampleError400)
     assertTrue(parsed.contains("image too blurry"))
   }
+
+  // ================= UNIVERSAL MEASUREMENT & INSTANT UNIT SWITCHING TESTS =================
+
+  @Test
+  fun testWeightUnitSwitchingPreservesPhysicalValue() {
+    val initialKg = 103.5f
+    val manager = com.example.domain.MeasurementUnitManager()
+
+    // 1. Convert to pounds
+    val lbDisplay = manager.formatKgToDisplay(initialKg, com.example.domain.WeightUnit.LB)
+    assertEquals("228.2", lbDisplay)
+
+    // 2. Convert from lb display back to normalized kg
+    val parsedKgFromLb = manager.parseWeightToKg(lbDisplay, com.example.domain.WeightUnit.LB)
+    assertEquals(103.5f, parsedKgFromLb!!, 0.1f)
+
+    // 3. Convert to stones
+    val stDisplay = manager.formatKgToDisplay(initialKg, com.example.domain.WeightUnit.ST)
+    assertEquals("16.3", stDisplay)
+    val parsedKgFromSt = manager.parseWeightToKg(stDisplay, com.example.domain.WeightUnit.ST)
+    assertEquals(103.5f, parsedKgFromSt!!, 0.2f)
+
+    // 4. In-place string conversion: kg -> lb without leaving screen
+    val convertedInPlace = manager.convertWeightDisplayString("103.5", com.example.domain.WeightUnit.KG, com.example.domain.WeightUnit.LB)
+    assertEquals("228.2", convertedInPlace)
+  }
+
+  @Test
+  fun testHeightUnitConversionsAndSplitFeetInches() {
+    val heightCm = 155.0f
+    val manager = com.example.domain.MeasurementUnitManager()
+
+    // 1. To meters
+    val (mStr, _) = manager.formatCmToDisplay(heightCm, com.example.domain.HeightUnit.M)
+    assertEquals("1.55", mStr)
+
+    // 2. To inches
+    val (inStr, _) = manager.formatCmToDisplay(heightCm, com.example.domain.HeightUnit.IN)
+    assertEquals("61.0", inStr)
+
+    // 3. To Feet and Inches (155 cm = ~5 feet 1.02 inches)
+    val (ftStr, inStrSplit) = manager.formatCmToDisplay(heightCm, com.example.domain.HeightUnit.FT_IN)
+    assertEquals("5", ftStr)
+    assertEquals("1", inStrSplit)
+
+    // 4. Parse Feet + Inches back to cm
+    val parsedCm = manager.parseHeightToCm("5", com.example.domain.HeightUnit.FT_IN, "1")
+    assertEquals(154.94f, parsedCm!!, 0.5f)
+  }
+
+  @Test
+  fun testCircumferenceUnitConversions() {
+    val waistInches = 38.5f
+    val inCm = com.example.domain.UnitConversionEngine.convertCircumference(
+      waistInches,
+      com.example.domain.CircumferenceUnit.IN,
+      com.example.domain.CircumferenceUnit.CM
+    )
+    assertEquals(97.79f, inCm, 0.1f)
+
+    val backToIn = com.example.domain.UnitConversionEngine.convertCircumference(
+      inCm,
+      com.example.domain.CircumferenceUnit.CM,
+      com.example.domain.CircumferenceUnit.IN
+    )
+    assertEquals(38.5f, backToIn, 0.1f)
+  }
+
+  @Test
+  fun testDecimalInputValidatorSanitizationAndRange() {
+    // 1. Replace commas with dots
+    val sanitizedComma = com.example.domain.DecimalInputValidator.sanitizeDecimalInput("103,5")
+    assertEquals("103.5", sanitizedComma)
+
+    // 2. Multiple decimal points prevented
+    val sanitizedMultiDot = com.example.domain.DecimalInputValidator.sanitizeDecimalInput("103.5.7")
+    assertEquals("103.57", sanitizedMultiDot)
+
+    // 3. Range validation
+    val validResult = com.example.domain.DecimalInputValidator.validateRange("70.5", 20f, 300f, "Weight", "kg")
+    assertTrue(validResult.isValid)
+    assertEquals(70.5f, validResult.parsedValue!!, 0.01f)
+
+    val outOfRange = com.example.domain.DecimalInputValidator.validateRange("500", 20f, 300f, "Weight", "kg")
+    assertFalse(outOfRange.isValid)
+  }
+
+  @Test
+  fun testSmartBmiIndicatorAndWhoClassifications() {
+    // Height = 175cm, Weight = 70kg -> BMI = 70 / (1.75^2) = 22.86 -> 22.9
+    val bmi = com.example.domain.BodyCompositionEngine.calculateBmi(70f, 175f)
+    assertEquals(22.9f, bmi, 0.1f)
+    val cat = com.example.domain.BmiCategory.fromBmi(bmi)
+    assertEquals(com.example.domain.BmiCategory.NORMAL, cat)
+
+    // Overweight test
+    val bmiOver = com.example.domain.BodyCompositionEngine.calculateBmi(85f, 175f)
+    assertEquals(27.8f, bmiOver, 0.1f)
+    assertEquals(com.example.domain.BmiCategory.OVERWEIGHT, com.example.domain.BmiCategory.fromBmi(bmiOver))
+
+    // Healthy weight range for 175cm: min = 18.5 * 1.75^2 = 56.66kg, max = 24.9 * 1.75^2 = 76.26kg
+    val (minHealthy, maxHealthy) = com.example.domain.BodyCompositionEngine.calculateHealthyWeightRange(175f)
+    assertEquals(56.7f, minHealthy, 0.1f)
+    assertEquals(76.3f, maxHealthy, 0.1f)
+  }
+
+  @Test
+  fun testBodyFatCalculationsNavyAndDeurenberg() {
+    // Male Navy Formula Test Vector: Height 175cm, Waist 82cm, Neck 38cm
+    val maleBf = com.example.domain.BodyCompositionEngine.calculateNavyBodyFatPercentage(
+      isMale = true,
+      heightCm = 175f,
+      waistCm = 82f,
+      neckCm = 38f
+    )
+    assertTrue("Male body fat percentage must be computed", maleBf != null && maleBf > 0f)
+    assertTrue("Realistic male body fat range", maleBf!! in 10f..25f)
+
+    // Female Navy Formula Test Vector: Height 165cm, Waist 74cm, Neck 34cm, Hip 96cm
+    val femaleBf = com.example.domain.BodyCompositionEngine.calculateNavyBodyFatPercentage(
+      isMale = false,
+      heightCm = 165f,
+      waistCm = 74f,
+      neckCm = 34f,
+      hipCm = 96f
+    )
+    assertTrue("Female body fat percentage must be computed", femaleBf != null && femaleBf > 0f)
+    assertTrue("Realistic female body fat range", femaleBf!! in 18f..35f)
+
+    // Fallback Deurenberg calculation
+    val fallbackBf = com.example.domain.BodyCompositionEngine.calculateBmiBasedBodyFatPercentage(
+      bmi = 22.9f,
+      age = 26,
+      isMale = true
+    )
+    assertTrue(fallbackBf in 10f..25f)
+  }
+
+  @Test
+  fun testFoodVolumeToWeightIngredientSpecificDensity() {
+    // 1. Water: 100 ml -> 100g (density = 1.0)
+    val waterGrams = com.example.domain.UnitConversionEngine.convertFoodToGrams("Water", 100f, com.example.domain.FoodUnit.ML)
+    assertEquals(100f, waterGrams, 0.1f)
+
+    // 2. Cooking Oil: 100 ml -> 92g (density = 0.92, never assume 1ml = 1g!)
+    val oilGrams = com.example.domain.UnitConversionEngine.convertFoodToGrams("Mustard Cooking Oil", 100f, com.example.domain.FoodUnit.ML)
+    assertEquals(92f, oilGrams, 0.1f)
+
+    // 3. Honey: 100 ml -> 142g (density = 1.42)
+    val honeyGrams = com.example.domain.UnitConversionEngine.convertFoodToGrams("Raw Honey", 100f, com.example.domain.FoodUnit.ML)
+    assertEquals(142f, honeyGrams, 0.1f)
+
+    // 4. Whole Milk: 100 ml -> 103g (density = 1.03)
+    val milkGrams = com.example.domain.UnitConversionEngine.convertFoodToGrams("Cow Milk", 100f, com.example.domain.FoodUnit.ML)
+    assertEquals(103f, milkGrams, 0.1f)
+  }
+
+  @Test
+  fun testRoomDatabaseBodyCompositionOperations() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = com.example.data.local.AppDatabase.getDatabase(context)
+    val repository = com.example.data.repository.MeasurementRepository(db)
+
+    val recordId = repository.recordBodyComposition(
+      weightKg = 72.5f,
+      heightCm = 176.0f,
+      age = 27,
+      gender = "Male",
+      waistCm = 81.5f,
+      neckCm = 37.5f,
+      hipCm = 94.0f,
+      notes = "Unit Test Entry"
+    )
+    assertTrue(recordId > 0)
+
+    val latestFlow = repository.latestBodyComposition
+    val record = latestFlow.first()
+    assertTrue(record != null)
+    assertEquals(72.5f, record!!.weightKg, 0.1f)
+    assertEquals(81.5f, record.waistCm!!, 0.1f)
+    assertTrue(record.bmi > 0f)
+    assertTrue(record.bodyFatPercentage > 0f)
+
+    repository.deleteBodyComposition(record.id)
+  }
+
+  @Test
+  fun testBodyTwinEngineBiometrics() {
+    // 1. Janssen SMM Calculation for Male (175cm, 70kg, 26 yo)
+    val maleSmm = com.example.domain.BodyTwinEngine.calculateSkeletalMuscleMass(
+      weightKg = 75f,
+      heightCm = 175f,
+      age = 26,
+      isMale = true
+    )
+    assertTrue("Male SMM should be between 20kg and 40kg, got $maleSmm", maleSmm in 20f..40f)
+
+    // 2. Female SMM (165cm, 58kg, 26 yo)
+    val femaleSmm = com.example.domain.BodyTwinEngine.calculateSkeletalMuscleMass(
+      weightKg = 58f,
+      heightCm = 165f,
+      age = 26,
+      isMale = false
+    )
+    assertTrue("Female SMM should be between 15kg and 30kg, got $femaleSmm", femaleSmm in 15f..30f)
+
+    // 3. SMM Percentage & Category
+    val maleSmmPct = com.example.domain.BodyTwinEngine.calculateMuscleMassPercentage(maleSmm, 70f)
+    assertTrue(maleSmmPct > 0f)
+    val category = com.example.domain.BodyTwinEngine.getMuscleMassCategory(maleSmmPct, isMale = true)
+    assertTrue(category in com.example.domain.MuscleMassCategory.entries)
+
+    // 4. Clinical Visceral Fat Index (1 to 20 rating)
+    val vfiBalanced = com.example.domain.BodyTwinEngine.calculateVisceralFatIndex(
+      waistCm = 68f,
+      heightCm = 175f,
+      bmi = 22.5f,
+      age = 26
+    )
+    assertTrue("VFI should be in 1..20 scale, got $vfiBalanced", vfiBalanced in 1.0f..20.0f)
+    val vfiCategory = com.example.domain.VisceralFatCategory.fromRating(vfiBalanced)
+    assertEquals(com.example.domain.VisceralFatCategory.BALANCED, vfiCategory)
+
+    // 5. Waist-to-Height Ratio
+    val whtr = com.example.domain.BodyTwinEngine.calculateWaistToHeightRatio(waistCm = 80f, heightCm = 175f)
+    assertEquals(0.46f, whtr, 0.02f)
+    val whtrCat = com.example.domain.WaistToHeightCategory.fromRatio(whtr)
+    assertEquals(com.example.domain.WaistToHeightCategory.OPTIMAL, whtrCat)
+  }
+
+  @Test
+  fun testBodyTwinEnginePredictiveFutureModel() {
+    val prediction3M = com.example.domain.BodyTwinEngine.predictFutureBody(
+      currentWeightKg = 80f,
+      heightCm = 175f,
+      currentBfPercent = 25f,
+      currentWaistCm = 92f,
+      age = 28,
+      isMale = true,
+      dailyCalorieDeficitKcal = 500,
+      timeframeMonths = 3
+    )
+
+    assertEquals(3, prediction3M.timeframeMonths)
+    assertEquals(90, prediction3M.daysAhead)
+    assertTrue(prediction3M.projectedWeightKg < 80f)
+    assertTrue(prediction3M.projectedBodyFatPercent < 25f)
+    assertTrue(prediction3M.isSimulation)
+    assertTrue(prediction3M.totalWeightLossKg > 0f)
+    assertTrue(prediction3M.estimatedFatLossKg > 0f)
+
+    val prediction6M = com.example.domain.BodyTwinEngine.predictFutureBody(
+      currentWeightKg = 80f,
+      heightCm = 175f,
+      currentBfPercent = 25f,
+      currentWaistCm = 92f,
+      age = 28,
+      isMale = true,
+      dailyCalorieDeficitKcal = 500,
+      timeframeMonths = 6
+    )
+
+    assertEquals(6, prediction6M.timeframeMonths)
+    assertTrue(prediction6M.projectedWeightKg < prediction3M.projectedWeightKg)
+  }
+
+  @Test
+  fun testBodyTwinEngineAll20Milestones() {
+    val milestones = com.example.domain.BodyTwinEngine.evaluateMilestones(
+      startingWeightKg = 85f,
+      currentWeightKg = 78f, // 7 kg lost
+      targetWeightKg = 75f,
+      startingWaistCm = 96f,
+      currentWaistCm = 88f, // 8 cm lost
+      bodyFatPercent = 18f,
+      startingBfPercent = 26f, // 8% lost
+      muscleMassKg = 31f,
+      startingMuscleMassKg = 29.5f, // +1.5kg
+      visceralFatIndex = 7.5f,
+      totalSnapshotsCount = 5,
+      weeklyCheckInsCount = 4,
+      hasProgressPhoto = true
+    )
+
+    assertEquals(20, milestones.size)
+
+    val m1Kg = milestones.first { it.code == "WEIGHT_DROP_1KG" }
+    assertTrue(m1Kg.isUnlocked)
+
+    val m5Kg = milestones.first { it.code == "WEIGHT_DROP_5KG" }
+    assertTrue(m5Kg.isUnlocked)
+
+    val mWaist = milestones.first { it.code == "WAIST_MINUS_5CM" }
+    assertTrue(mWaist.isUnlocked)
+
+    val mPhoto = milestones.first { it.code == "PHOTO_LOGGED" }
+    assertTrue(mPhoto.isUnlocked)
+
+    val mStreak4 = milestones.first { it.code == "CHECKIN_STREAK_4" }
+    assertTrue(mStreak4.isUnlocked)
+  }
+
+  @Test
+  fun testRoomDatabaseBodyTwinSnapshotOperations() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = com.example.data.local.AppDatabase.getDatabase(context)
+    val repository = com.example.data.repository.MeasurementRepository(db)
+
+    // 1. Consent management
+    repository.saveConsentPreferences(
+      com.example.data.model.BodyTwinConsentPreferences(
+        id = 1,
+        hasAcceptedPrivacyConsent = true,
+        consentedTimestamp = System.currentTimeMillis(),
+        allowLocalPhotoStorage = true
+      )
+    )
+
+    val consent = repository.consentPreferences.first()
+    assertTrue(consent != null && consent.hasAcceptedPrivacyConsent)
+
+    // 2. Snapshot insertion
+    val snapshotId = repository.saveBodyTwinSnapshot(
+      com.example.data.model.BodyTwinSnapshot(
+        dateString = "2026-10-30",
+        snapshotType = "WEEKLY_CHECKIN",
+        title = "Week 1 Twin Checkpoint",
+        weightKg = 71.5f,
+        heightCm = 175.0f,
+        bodyFatPercent = 19.5f,
+        muscleMassKg = 30.2f,
+        waistCm = 81.0f,
+        visceralFatIndex = 7.0f
+      )
+    )
+    assertTrue(snapshotId > 0)
+
+    val snapshots = repository.allBodyTwinSnapshots.first()
+    assertTrue(snapshots.any { it.id == snapshotId })
+
+    // 3. Purge all
+    repository.purgeAllBodyTwinData()
+    val clearedSnapshots = repository.allBodyTwinSnapshots.first()
+    assertTrue(clearedSnapshots.isEmpty())
+  }
+
+  @Test
+  fun testTargetedWeeklyWeightLossEngineCalculations() {
+    val targetResult = com.example.domain.TargetedWeeklyWeightLossEngine.calculateWeeklyTarget(
+      startingWeightKg = 103f,
+      currentWeightKg = 98f,
+      targetWeightKg = 60f,
+      previousWeekWeightKg = 98.8f,
+      heightCm = 172f,
+      age = 30,
+      isMale = true,
+      activityLevel = "Moderate"
+    )
+
+    assertEquals(103f, targetResult.startingWeightKg, 0.1f)
+    assertEquals(98f, targetResult.currentWeightKg, 0.1f)
+    assertEquals(60f, targetResult.targetWeightKg, 0.1f)
+    assertTrue(targetResult.remainingWeightKg > 0f)
+    assertTrue(targetResult.goalProgressPercent > 0f)
+    assertEquals(com.example.domain.SafetyStatus.SAFE, targetResult.safetyStatus)
+  }
+
+  @Test
+  fun testTargetedWeeklyProgramGenerator() {
+    val program = com.example.domain.TargetedWeeklyWeightLossEngine.generate7DayProgram(
+      currentWeightKg = 85f,
+      heightCm = 175f,
+      age = 26,
+      isMale = true,
+      activityLevel = "Moderate",
+      dietaryPreference = "Standard Nepali & Asian"
+    )
+
+    assertEquals(7, program.size)
+    assertEquals("Monday", program[0].dayName)
+    assertTrue(program[0].calorieTarget > 1200)
+    assertTrue(program[0].proteinTargetGrams > 50)
+  }
+
+  @Test
+  fun testAutomaticWeeklyAdjustment() {
+    // Slower than expected (plateau)
+    val (adjSlower, _) = com.example.domain.TargetedWeeklyWeightLossEngine.performAutomaticWeeklyAdjustment(
+      actualWeeklyChangeKg = 0.1f,
+      expectedMinLossKg = 0.5f,
+      expectedMaxLossKg = 1.0f
+    )
+    assertTrue(adjSlower < 0f) // negative calorie adjustment
+
+    // Faster than expected (rapid loss)
+    val (adjFaster, _) = com.example.domain.TargetedWeeklyWeightLossEngine.performAutomaticWeeklyAdjustment(
+      actualWeeklyChangeKg = -1.6f,
+      expectedMinLossKg = 0.5f,
+      expectedMaxLossKg = 1.0f
+    )
+    assertTrue(adjFaster > 0f) // positive calorie addition
+  }
+
+  @Test
+  fun testSafetyEngine() {
+    // Underweight risk check
+    val (status, _) = com.example.domain.TargetedWeeklyWeightLossEngine.evaluateSafety(
+      currentWeightKg = 55f,
+      targetWeightKg = 42f,
+      heightCm = 175f
+    )
+    assertEquals(com.example.domain.SafetyStatus.CAUTION_UNDERWEIGHT_RISK, status)
+  }
 }
+
+
 

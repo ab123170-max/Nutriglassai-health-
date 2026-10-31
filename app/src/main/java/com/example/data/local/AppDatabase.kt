@@ -16,6 +16,12 @@ import com.example.data.model.UserProfile
 import com.example.data.model.WaterEntry
 import com.example.data.model.WeightRecord
 import com.example.data.model.WorkoutSession
+import com.example.data.model.FastingProfileEntity
+import com.example.data.model.FastingScheduleEntity
+import com.example.data.model.FastingSessionEntity
+import com.example.data.model.FastingHistoryEntity
+import com.example.data.model.FastingReminderEntity
+import com.example.data.model.FastingProgressEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,9 +49,18 @@ import kotlinx.coroutines.launch
         com.example.data.model.WeeklyCheckInEntity::class,
         com.example.data.model.CheckInQuestionnaireEntity::class,
         com.example.data.model.WeeklyPlanEntity::class,
-        com.example.data.model.WeeklyCheckInPreferences::class
+        com.example.data.model.WeeklyCheckInPreferences::class,
+        com.example.data.model.BodyCompositionRecord::class,
+        com.example.data.model.BodyTwinSnapshot::class,
+        com.example.data.model.BodyTwinConsentPreferences::class,
+        FastingProfileEntity::class,
+        FastingScheduleEntity::class,
+        FastingSessionEntity::class,
+        FastingHistoryEntity::class,
+        FastingReminderEntity::class,
+        FastingProgressEntity::class
     ],
-    version = 6,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -54,6 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun foodDao(): FoodDao
     abstract fun healthDao(): HealthDao
     abstract fun achievementDao(): AchievementDao
+    abstract fun fastingDao(): FastingDao
 
     companion object {
         @Volatile
@@ -79,6 +95,9 @@ abstract class AppDatabase : RoomDatabase() {
                                 database.healthDao().saveUserProfile(UserProfile())
                                 // Prepopulate default measurement preferences
                                 database.healthDao().saveMeasurementPreferences(com.example.data.model.UserMeasurementPreferences())
+                                // Prepopulate fasting schedules & default profile
+                                database.fastingDao().insertSchedules(FastingPreloadedData.defaultSchedules)
+                                database.fastingDao().saveProfile(FastingProfileEntity())
                             }
                         }
                     }

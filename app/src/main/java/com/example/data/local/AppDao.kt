@@ -281,6 +281,51 @@ interface HealthDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveWeeklyCheckInPreferences(prefs: com.example.data.model.WeeklyCheckInPreferences)
+
+    // Body Composition & 3D Obesity Analysis
+    @Query("SELECT * FROM body_composition_records ORDER BY timestamp DESC LIMIT 1")
+    fun getLatestBodyComposition(): Flow<com.example.data.model.BodyCompositionRecord?>
+
+    @Query("SELECT * FROM body_composition_records ORDER BY timestamp DESC")
+    fun getAllBodyCompositions(): Flow<List<com.example.data.model.BodyCompositionRecord>>
+
+    @Query("SELECT * FROM body_composition_records WHERE dateString = :date ORDER BY timestamp DESC LIMIT 1")
+    fun getBodyCompositionForDate(date: String): Flow<com.example.data.model.BodyCompositionRecord?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBodyComposition(record: com.example.data.model.BodyCompositionRecord): Long
+
+    @Query("DELETE FROM body_composition_records WHERE id = :id")
+    suspend fun deleteBodyComposition(id: Long)
+
+    // Body Twin & 3D Transformation System
+    @Query("SELECT * FROM body_twin_snapshots ORDER BY timestamp DESC")
+    fun getAllBodyTwinSnapshots(): Flow<List<com.example.data.model.BodyTwinSnapshot>>
+
+    @Query("SELECT * FROM body_twin_snapshots WHERE isSimulation = 0 ORDER BY timestamp DESC")
+    fun getHistoricalBodyTwinSnapshots(): Flow<List<com.example.data.model.BodyTwinSnapshot>>
+
+    @Query("SELECT * FROM body_twin_snapshots WHERE snapshotType = :type ORDER BY timestamp DESC")
+    fun getBodyTwinSnapshotsByType(type: String): Flow<List<com.example.data.model.BodyTwinSnapshot>>
+
+    @Query("SELECT * FROM body_twin_snapshots ORDER BY timestamp DESC LIMIT 1")
+    fun getLatestBodyTwinSnapshot(): Flow<com.example.data.model.BodyTwinSnapshot?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBodyTwinSnapshot(snapshot: com.example.data.model.BodyTwinSnapshot): Long
+
+    @Query("DELETE FROM body_twin_snapshots WHERE id = :id")
+    suspend fun deleteBodyTwinSnapshot(id: Long)
+
+    @Query("DELETE FROM body_twin_snapshots")
+    suspend fun deleteAllBodyTwinSnapshots()
+
+    // Privacy & Sensitive Data Protection
+    @Query("SELECT * FROM body_twin_consent_preferences WHERE id = 1 LIMIT 1")
+    fun getBodyTwinConsentPreferences(): Flow<com.example.data.model.BodyTwinConsentPreferences?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveBodyTwinConsentPreferences(prefs: com.example.data.model.BodyTwinConsentPreferences)
 }
 
 @Dao

@@ -360,6 +360,18 @@ class HealthRepository(private val database: AppDatabase) {
     suspend fun saveWeeklyCheckInPreferences(prefs: com.example.data.model.WeeklyCheckInPreferences) {
         healthDao.saveWeeklyCheckInPreferences(prefs)
     }
+
+    // Body Composition & 3D Obesity Analysis
+    val latestBodyComposition: Flow<com.example.data.model.BodyCompositionRecord?> = healthDao.getLatestBodyComposition()
+    val allBodyCompositions: Flow<List<com.example.data.model.BodyCompositionRecord>> = healthDao.getAllBodyCompositions()
+
+    fun getBodyCompositionForDate(date: String): Flow<com.example.data.model.BodyCompositionRecord?> =
+        healthDao.getBodyCompositionForDate(date)
+
+    suspend fun insertBodyComposition(record: com.example.data.model.BodyCompositionRecord): Long =
+        healthDao.insertBodyComposition(record)
+
+    suspend fun deleteBodyComposition(id: Long) = healthDao.deleteBodyComposition(id)
 }
 
 

@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Assessment
+import com.example.ui.screens.TargetedWeightLossScreen
+import com.example.ui.viewmodel.FastingViewModel
+import com.example.ui.screens.fasting.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -59,7 +62,9 @@ import com.example.ui.screens.WalkAndListenScreen
 import com.example.ui.screens.PdfReaderScreen
 import com.example.ui.screens.WeeklyCheckInScreen
 import com.example.ui.screens.WeeklyProgressDashboardScreen
+import com.example.ui.screens.BodyCompositionScreen
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.ViewInAr
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Home : Screen("home", "Home", Icons.Default.Home)
@@ -75,6 +80,18 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object PdfReader : Screen("pdf_reader", "PDF Reader", Icons.Default.AutoStories)
     object WeeklyCheckIn : Screen("weekly_check_in", "Weekend Check-In", Icons.Default.Assessment)
     object WeeklyProgressDashboard : Screen("weekly_progress", "Weekly Progress", Icons.Default.Assessment)
+    object BodyComposition : Screen("body_composition", "Body 3D", Icons.Default.ViewInAr)
+    object TargetedWeightLoss : Screen("targeted_weight_loss", "Weekly Weight Loss", Icons.Default.Assessment)
+    object FastingDashboard : Screen("fasting_dashboard", "Fasting Dashboard", Icons.Default.Assessment)
+    object FastingChooseMethod : Screen("fasting_choose", "Choose Method", Icons.Default.Tune)
+    object FastingSetup : Screen("fasting_setup", "Fasting Setup", Icons.Default.Person)
+    object FastingTimer : Screen("fasting_timer", "Live Timer", Icons.Default.Assessment)
+    object FastingEatingWindow : Screen("fasting_eating", "Eating Window", Icons.Default.Restaurant)
+    object FastingCalendar : Screen("fasting_calendar", "Calendar", Icons.Default.Assessment)
+    object FastingHistory : Screen("fasting_history", "History", Icons.Default.Assessment)
+    object FastingNutrition : Screen("fasting_nutrition", "Nutrition", Icons.Default.Restaurant)
+    object FastingAnalytics : Screen("fasting_analytics", "Analytics", Icons.Default.Assessment)
+    object FastingSafety : Screen("fasting_safety", "Safety", Icons.Default.Assessment)
 }
 
 class MainActivity : ComponentActivity() {
@@ -127,7 +144,7 @@ fun NutriGlassApp(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (currentScreen != Screen.AiCoach && currentScreen != Screen.MeasurementUnits) {
+            if (currentScreen != Screen.AiCoach && currentScreen != Screen.MeasurementUnits && currentScreen != Screen.BodyComposition && currentScreen != Screen.TargetedWeightLoss) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp,
@@ -178,7 +195,8 @@ fun NutriGlassApp(
                     onNavigateToFood = { currentScreen = Screen.Food },
                     onNavigateToActivity = { currentScreen = Screen.Activity },
                     onNavigateToProgress = { currentScreen = Screen.Progress },
-                    onNavigateToAiCoach = { currentScreen = Screen.AiCoach }
+                    onNavigateToAiCoach = { currentScreen = Screen.AiCoach },
+                    onNavigateToBodyComposition = { currentScreen = Screen.BodyComposition }
                 )
                 Screen.Food -> FoodScreen(
                     viewModel = viewModel,
@@ -201,7 +219,10 @@ fun NutriGlassApp(
                     onNavigateToMonthlyReport = { currentScreen = Screen.MonthlyReport },
                     onNavigateToWalkAndLearn = { currentScreen = Screen.WalkAndLearn },
                     onNavigateToWeeklyCheckIn = { currentScreen = Screen.WeeklyCheckIn },
-                    onNavigateToWeeklyProgress = { currentScreen = Screen.WeeklyProgressDashboard }
+                    onNavigateToWeeklyProgress = { currentScreen = Screen.WeeklyProgressDashboard },
+                    onNavigateToBodyComposition = { currentScreen = Screen.BodyComposition },
+                    onNavigateToTargetedWeightLoss = { currentScreen = Screen.TargetedWeightLoss },
+                    onNavigateToFasting = { currentScreen = Screen.FastingDashboard }
                 )
                 Screen.MeasurementUnits -> MeasurementUnitsScreen(
                     viewModel = viewModel,
@@ -236,6 +257,64 @@ fun NutriGlassApp(
                     onNavigateBack = { currentScreen = Screen.Home },
                     onNavigateToCheckIn = { currentScreen = Screen.WeeklyCheckIn }
                 )
+                Screen.BodyComposition -> BodyCompositionScreen(
+                    onNavigateBack = { currentScreen = Screen.Home }
+                )
+                Screen.TargetedWeightLoss -> TargetedWeightLossScreen(
+                    onNavigateBack = { currentScreen = Screen.Home }
+                )
+                Screen.FastingDashboard -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    FastingDashboardScreen(
+                        viewModel = fastingVm,
+                        onNavigateBack = { currentScreen = Screen.Profile },
+                        onNavigateToChooseMethod = { currentScreen = Screen.FastingChooseMethod },
+                        onNavigateToSetup = { currentScreen = Screen.FastingSetup },
+                        onNavigateToTimer = { currentScreen = Screen.FastingTimer },
+                        onNavigateToEatingWindow = { currentScreen = Screen.FastingEatingWindow },
+                        onNavigateToCalendar = { currentScreen = Screen.FastingCalendar },
+                        onNavigateToHistory = { currentScreen = Screen.FastingHistory },
+                        onNavigateToNutrition = { currentScreen = Screen.FastingNutrition },
+                        onNavigateToAnalytics = { currentScreen = Screen.FastingAnalytics },
+                        onNavigateToSafety = { currentScreen = Screen.FastingSafety }
+                    )
+                }
+                Screen.FastingChooseMethod -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    ChooseFastingMethodScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingSetup -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    PersonalizedFastingSetupScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingTimer -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    LiveFastingTimerScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingEatingWindow -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    EatingWindowDashboardScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingCalendar -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    WeeklyFastingCalendarScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingHistory -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    FastingHistoryScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingNutrition -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    NutritionDuringEatingWindowScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingAnalytics -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    FastingAnalyticsScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
+                Screen.FastingSafety -> {
+                    val fastingVm: FastingViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+                    SafetyAndMedicalInformationScreen(viewModel = fastingVm, onNavigateBack = { currentScreen = Screen.FastingDashboard })
+                }
             }
         }
     }

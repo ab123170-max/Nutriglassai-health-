@@ -29,10 +29,13 @@ data class UserProfile(
 data class UserMeasurementPreferences(
     @PrimaryKey val id: Int = 1,
     val weightUnit: String = "kg", // "kg", "g", "lb", "st"
-    val heightUnit: String = "cm", // "cm", "m", "ft_in", "in"
+    val heightUnit: String = "cm", // "cm", "m", "ft_in", "in", "ft"
+    val bodyMeasurementUnit: String = "cm", // "cm", "in"
     val foodUnit: String = "g", // "g", "oz", "serving", "cup"
-    val waterUnit: String = "ml", // "ml", "L", "fl_oz", "glass", "bottle"
+    val waterUnit: String = "ml", // "ml", "L", "fl_oz", "glass", "bottle", "cup"
     val distanceUnit: String = "km", // "km", "mi", "m"
+    val speedUnit: String = "km/h", // "km/h", "mph"
+    val exerciseWeightUnit: String = "kg", // "kg", "lb"
     val usualGlassSizeMl: Int = 250,
     val usualBottleSizeMl: Int = 750
 )
@@ -427,5 +430,54 @@ data class WeeklyCheckInPreferences(
     val missedReminderSent: Boolean = false
 )
 
+@Entity(tableName = "body_composition_records")
+data class BodyCompositionRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateString: String, // YYYY-MM-DD
+    val timestamp: Long = System.currentTimeMillis(),
+    val weightKg: Float,
+    val heightCm: Float,
+    val age: Int = 26,
+    val gender: String = "Male", // "Male" or "Female"
+    val waistCm: Float? = null,
+    val neckCm: Float? = null,
+    val hipCm: Float? = null,
+    val chestCm: Float? = null,
+    val armCm: Float? = null,
+    val thighCm: Float? = null,
+    val calfCm: Float? = null,
+    val bmi: Float,
+    val bodyFatPercentage: Float,
+    val fatMassKg: Float,
+    val leanMassKg: Float,
+    val calculationMethod: String = "BMI_AGE_ESTIMATION", // "NAVY_CIRCUMFERENCE" or "BMI_AGE_ESTIMATION"
+    val notes: String = ""
+)
 
+@Entity(tableName = "body_twin_snapshots")
+data class BodyTwinSnapshot(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateString: String, // YYYY-MM-DD
+    val timestamp: Long = System.currentTimeMillis(),
+    val snapshotType: String = "WEEKLY_CHECKIN", // "ONBOARDING", "WEEKLY_CHECKIN", "MONTHLY_PROGRESS", "MILESTONE", "GOAL", "PREDICTION_3M", "PREDICTION_6M"
+    val title: String = "Body Twin Checkpoint",
+    val weightKg: Float,
+    val heightCm: Float,
+    val bodyFatPercent: Float,
+    val muscleMassKg: Float,
+    val waistCm: Float? = null,
+    val neckCm: Float? = null,
+    val hipCm: Float? = null,
+    val visceralFatIndex: Float = 9f,
+    val photoPath: String? = null, // Local private app storage URI/path
+    val isSimulation: Boolean = false,
+    val notes: String = ""
+)
 
+@Entity(tableName = "body_twin_consent_preferences")
+data class BodyTwinConsentPreferences(
+    @PrimaryKey val id: Int = 1,
+    val hasAcceptedPrivacyConsent: Boolean = false,
+    val consentedTimestamp: Long = 0L,
+    val allowLocalPhotoStorage: Boolean = true
+)

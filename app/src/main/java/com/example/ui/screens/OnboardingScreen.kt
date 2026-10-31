@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserProfile
 import com.example.domain.NutritionEngine
+import com.example.domain.DecimalInputValidator
 import com.example.ui.theme.CalorieGreen
 import com.example.ui.theme.HealthNavy
 import com.example.ui.theme.HealthTeal
@@ -206,22 +207,25 @@ fun OnboardingScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedTextField(
                                 value = heightCm,
-                                onValueChange = { heightCm = it.filter { ch -> ch.isDigit() } },
+                                onValueChange = { heightCm = DecimalInputValidator.sanitizeDecimalInput(it) },
                                 label = { Text("Height (cm)") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
                                 value = weightKg,
-                                onValueChange = { weightKg = it.filter { ch -> ch.isDigit() } },
+                                onValueChange = { weightKg = DecimalInputValidator.sanitizeDecimalInput(it) },
                                 label = { Text("Current Wt (kg)") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f).testTag("onboarding_weight_input")
                             )
                         }
 
                         OutlinedTextField(
                             value = targetWeightKg,
-                            onValueChange = { targetWeightKg = it.filter { ch -> ch.isDigit() } },
+                            onValueChange = { targetWeightKg = DecimalInputValidator.sanitizeDecimalInput(it) },
                             label = { Text("Target Weight (kg)") },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

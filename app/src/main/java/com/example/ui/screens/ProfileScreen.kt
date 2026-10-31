@@ -74,6 +74,8 @@ import com.example.ui.viewmodel.HealthViewModel
 import androidx.compose.material.icons.filled.Assessment
 
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.ViewInAr
+import com.example.domain.DecimalInputValidator
 
 @Composable
 fun ProfileScreen(
@@ -83,6 +85,9 @@ fun ProfileScreen(
     onNavigateToWalkAndLearn: () -> Unit = {},
     onNavigateToWeeklyCheckIn: () -> Unit = {},
     onNavigateToWeeklyProgress: () -> Unit = {},
+    onNavigateToBodyComposition: () -> Unit = {},
+    onNavigateToTargetedWeightLoss: () -> Unit = {},
+    onNavigateToFasting: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -92,9 +97,9 @@ fun ProfileScreen(
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf(userProfile.name) }
     var editAge by remember { mutableStateOf(userProfile.age.toString()) }
-    var editHeight by remember { mutableStateOf(userProfile.heightCm.toInt().toString()) }
-    var editWeight by remember { mutableStateOf(userProfile.weightKg.toInt().toString()) }
-    var editTargetWeight by remember { mutableStateOf(userProfile.targetWeightKg.toInt().toString()) }
+    var editHeight by remember { mutableStateOf(userProfile.heightCm.toString()) }
+    var editWeight by remember { mutableStateOf(userProfile.weightKg.toString()) }
+    var editTargetWeight by remember { mutableStateOf(userProfile.targetWeightKg.toString()) }
     var editGoal by remember { mutableStateOf(userProfile.fitnessGoal) }
     var editActivity by remember { mutableStateOf(userProfile.activityLevel) }
 
@@ -274,6 +279,103 @@ fun ProfileScreen(
             }
         }
 
+        // AI Body Twin & 3D Transformation Card
+        item {
+            SamsungHealthCard(
+                title = "AI Body Twin & 3D Transformation",
+                icon = Icons.Default.ViewInAr,
+                iconTint = HealthTeal,
+                headerActionText = "Launch Avatar",
+                onHeaderActionClick = onNavigateToBodyComposition
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToBodyComposition() },
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("AI 3D Body Avatar", "360° Anatomical Vertex Morph")
+                    GoalRow("Biometric Composition", "SMM, Visceral Fat & WHtR")
+                    GoalRow("AI Future Simulation", "3-Month & 6-Month Predictions")
+                    GoalRow("Gamification System", "20 Transformation Milestones")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToBodyComposition,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_open_body_comp_btn")
+                    ) {
+                        Text("Launch AI Body Twin System")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        // Targeted Weekly Weight Loss Engine Card
+        item {
+            SamsungHealthCard(
+                title = "Targeted Weekly Weight Loss",
+                icon = Icons.Default.Assessment,
+                iconTint = HealthTeal,
+                headerActionText = "Launch Engine",
+                onHeaderActionClick = onNavigateToTargetedWeightLoss
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToTargetedWeightLoss() },
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("Dynamic Weekly Calculator", "0.5kg–1.0kg Sustainable Rate")
+                    GoalRow("7-Day Metabolic Program", "Macros, Meals & Activity")
+                    GoalRow("Automatic Weekly Review", "Conservative Adjustments")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToTargetedWeightLoss,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_open_targeted_weight_loss_btn")
+                    ) {
+                        Text("Open Targeted Weight Loss Engine")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        // Intelligent Fasting Engine Card
+        item {
+            SamsungHealthCard(
+                title = "Intelligent Fasting Engine",
+                icon = Icons.Default.DateRange,
+                iconTint = HealthTeal,
+                headerActionText = "Launch Engine",
+                onHeaderActionClick = onNavigateToFasting
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToFasting() },
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GoalRow("9 Fasting Protocols", "16:8, OMAD, 5:2 & More")
+                    GoalRow("Live Fasting Timer", "Countdowns & State")
+                    GoalRow("Medical Safety Screening", "Safe & Guided")
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onNavigateToFasting,
+                        modifier = Modifier.fillMaxWidth().testTag("profile_open_fasting_engine_btn")
+                    ) {
+                        Text("Open Intelligent Fasting Engine")
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
         // Monthly Progress Report & Database Backup Tile
         item {
             SamsungHealthCard(
@@ -433,8 +535,9 @@ fun ProfileScreen(
                             )
                             OutlinedTextField(
                                 value = editHeight,
-                                onValueChange = { editHeight = it.filter { ch -> ch.isDigit() } },
+                                onValueChange = { editHeight = DecimalInputValidator.sanitizeDecimalInput(it) },
                                 label = { Text("Height (cm)") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -443,14 +546,16 @@ fun ProfileScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedTextField(
                                 value = editWeight,
-                                onValueChange = { editWeight = it.filter { ch -> ch.isDigit() } },
+                                onValueChange = { editWeight = DecimalInputValidator.sanitizeDecimalInput(it) },
                                 label = { Text("Weight (kg)") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
                                 value = editTargetWeight,
-                                onValueChange = { editTargetWeight = it.filter { ch -> ch.isDigit() } },
+                                onValueChange = { editTargetWeight = DecimalInputValidator.sanitizeDecimalInput(it) },
                                 label = { Text("Target (kg)") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                                 modifier = Modifier.weight(1f)
                             )
                         }

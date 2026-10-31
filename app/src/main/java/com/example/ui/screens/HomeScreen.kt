@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +79,7 @@ fun HomeScreen(
     onNavigateToActivity: () -> Unit,
     onNavigateToProgress: () -> Unit,
     onNavigateToAiCoach: () -> Unit,
+    onNavigateToBodyComposition: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val userProfile by viewModel.userProfile.collectAsState()
@@ -387,6 +389,76 @@ fun HomeScreen(
                                         .clickable { onNavigateToFood() }
                                         .padding(top = 4.dp)
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Body Composition & 3D Obesity Analysis Card
+            item {
+                val displayWeight = latestWeight?.weightKg ?: userProfile.weightKg
+                val heightM = (userProfile.heightCm / 100f).coerceAtLeast(0.5f)
+                val bmiVal = (displayWeight / (heightM * heightM) * 10f).let { kotlin.math.round(it) / 10f }
+                val isMale = userProfile.gender.equals("Male", ignoreCase = true)
+                val estimatedBf = ((1.20f * bmiVal) + (0.23f * userProfile.age) - (10.8f * if (isMale) 1f else 0f) - 5.4f).coerceIn(4f, 60f)
+
+                SamsungHealthCard(
+                    title = "AI Body Twin & 3D Transformation",
+                    icon = Icons.Default.ViewInAr,
+                    iconTint = HealthTeal,
+                    headerActionText = "Launch Avatar",
+                    onHeaderActionClick = onNavigateToBodyComposition
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToBodyComposition() }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "BMI $bmiVal",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        color = HealthTeal.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "${String.format("%.1f", estimatedBf)}% Body Fat",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = HealthTeal,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "360° dynamic avatar • 3M/6M AI future • 20 Milestones",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Button(
+                                onClick = onNavigateToBodyComposition,
+                                colors = ButtonDefaults.buttonColors(containerColor = HealthTeal),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(34.dp).testTag("home_open_3d_btn")
+                            ) {
+                                Icon(Icons.Default.ViewInAr, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("3D View", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
