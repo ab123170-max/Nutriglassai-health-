@@ -37,8 +37,8 @@ jobs:
           else
             printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > .env
           fi
-          printf 'SUPABASE_URL=%s\\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
-          printf 'SUPABASE_PUBLISHABLE_KEY=%s\\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
+          printf 'SUPABASE_URL=%s\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
+          printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
 
       - name: Create debug signing keystore
         run: |
