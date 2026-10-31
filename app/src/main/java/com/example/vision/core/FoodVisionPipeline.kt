@@ -113,9 +113,22 @@ class StandardFoodVisionPipeline(
             val visionItems = mutableListOf<FoodVisionItem>()
             val nutrientList = mutableListOf<NutrientBreakdown>()
 
-            // Empty detection means the photo could not be reliably localized.
-            // Do not invent a full-frame "Main Dish" region.
-            val regions = foodMask.regions
+            // No on-device detector model is bundled yet. Send the full photo to
+            // Gemini Vision for analysis, without claiming a detected food box.
+            val regions = foodMask.regions.ifEmpty {
+                listOf(
+                    FoodRegion(
+                        id = "gemini_full_image_scan",
+                        label = "AI full-image analysis",
+                        boundingBox = BoundingBox(0f, 0f, 1f, 1f, 0f, "ai_scan_frame", "AI scan frame", isFoodItem = false),
+                        relativeAreaFraction = 1f,
+                        boundaryCertainty = 0f
+                    )
+                )
+            }
+            val effectiveFoodMask = if (foodMask.regions.isEmpty()) {
+                foodMask.copy(regions = regions, totalFoodAreaFraction = 1f)
+            } else foodMask
 
             for (region in regions) {
                 coroutineContext.ensureActive()
@@ -185,14 +198,14 @@ class StandardFoodVisionPipeline(
             VisionProcessingResult.Success(
                 data = FoodVisionOutput(
                     detectedObjects = detectedObjects,
-                    foodMask = foodMask,
+                    foodMask = effectiveFoodMask,
                     items = visionItems,
                     totalNutrients = totalNutrients,
                     frameHash = frame.frameHash
                 ),
                 processingDurationMs = duration,
                 stageBreakdown = stageTimings,
-                modelUsed = "NutriGlass-OnDevice-V1.2"
+                modelUsed = "Gemini Vision via NutriGlass secure proxy"
             )
         } catch (e: CancellationException) {
             VisionProcessingResult.Cancelled
