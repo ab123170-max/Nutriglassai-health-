@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.Achievement
 import com.example.data.model.FoodItem
@@ -60,7 +61,7 @@ import kotlinx.coroutines.launch
         FastingReminderEntity::class,
         FastingProgressEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -75,33 +76,51 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        /**
+         * Version 9 and 10 retain the same table structure. Preserve all rows while
+         * updating Room's version. Replace only the old untouched 70 kg placeholder
+         * with the canonical onboarding weight when that profile exists.
+         */
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    UPDATE fasting_profile
+                    SET weightKg = (SELECT weightKg FROM user_profiles WHERE id = 1)
+                    WHERE id = 1
+                      AND weightKg = 70.0
+                      AND EXISTS (SELECT 1 FROM user_profiles WHERE id = 1)
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "nutriglass_health.db"
-                ).fallbackToDestructiveMigration()
-                .addCallback(object : Callback() {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        super.onCreate(db)
-                        INSTANCE?.let { database ->
-                            CoroutineScope(Dispatchers.IO).launch {
-                                // Prepopulate Nepali food items
-                                database.foodDao().insertFoods(PreloadedData.nepaliFoodItems)
-                                // Prepopulate 20 achievement milestones
-                                database.achievementDao().initAchievements(PreloadedData.allAchievements)
-                                // Prepopulate default profile
-                                database.healthDao().saveUserProfile(UserProfile())
-                                // Prepopulate default measurement preferences
-                                database.healthDao().saveMeasurementPreferences(com.example.data.model.UserMeasurementPreferences())
-                                // Prepopulate fasting schedules & default profile
-                                database.fastingDao().insertSchedules(FastingPreloadedData.defaultSchedules)
-                                database.fastingDao().saveProfile(FastingProfileEntity())
+                )
+                    .addMigrations(MIGRATION_9_10)
+                    .addCallback(object : Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            super.onCreate(db)
+                            INSTANCE?.let { database ->
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    database.foodDao().insertFoods(PreloadedData.nepaliFoodItems)
+                                    database.achievementDao().initAchievements(PreloadedData.allAchievements)
+                                    database.healthDao().saveUserProfile(UserProfile())
+                                    database.healthDao().saveMeasurementPreferences(
+                                        com.example.data.model.UserMeasurementPreferences()
+                                    )
+                                    database.fastingDao().insertSchedules(FastingPreloadedData.defaultSchedules)
+                                    database.fastingDao().saveProfile(FastingProfileEntity())
+                                }
                             }
                         }
-                    }
-                }).build()
+                    })
+                    .build()
                 INSTANCE = instance
                 instance
             }
