@@ -48,6 +48,7 @@ import com.example.ui.screens.ActivityScreen
 import com.example.ui.screens.AiCoachScreen
 import com.example.ui.screens.FoodScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.LandingScreen
 import com.example.ui.screens.MeasurementUnitsScreen
 import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.ProfileScreen
@@ -116,6 +117,16 @@ fun NutriGlassApp(
     val userProfile by viewModel.userProfile.collectAsState()
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
     var isOnboardingActive by remember { mutableStateOf(!userProfile.onboardingCompleted) }
+    var showLanding by remember { mutableStateOf(!userProfile.onboardingCompleted) }
+
+    // First-time users see the visual welcome page before the profile setup.
+    if (!userProfile.onboardingCompleted && showLanding) {
+        LandingScreen(onGetStarted = {
+            showLanding = false
+            isOnboardingActive = true
+        })
+        return
+    }
 
     // Synchronize onboarding state if profile changes
     if (!userProfile.onboardingCompleted && isOnboardingActive) {
