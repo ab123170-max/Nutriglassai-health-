@@ -20,14 +20,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.viewmodel.HealthViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-private val PageBg = Color(0xFFF1F1F4)
-private val CardBg = Color(0xFFFCFCFE)
-private val Ink = Color(0xFF25252A)
-private val Muted = Color(0xFF85858D)
-private val Orange = Color(0xFFFF6B24)
-private val Blue = Color(0xFF4D9DF5)
-private val Green = Color(0xFF39B980)
+private val HomeBackground = Color(0xFFF3F6FC)
+private val HomeCard = Color(0xFFFFFFFF)
+private val HomeInk = Color(0xFF11182D)
+private val HomeMuted = Color(0xFF68718A)
+private val HomeBlue = Color(0xFF1473EA)
+private val HomeGreen = Color(0xFF20B889)
+private val HomeOrange = Color(0xFFFF762F)
+private val HomePurple = Color(0xFF8964DB)
 
 @Composable
 fun HomeScreen(
@@ -47,153 +51,230 @@ fun HomeScreen(
     val water by viewModel.waterTotalMl.collectAsState()
     val weight by viewModel.latestWeight.collectAsState()
 
+    val currentSteps = steps?.steps ?: 0
+    val distanceKm = (steps?.distanceMeters ?: 0f) / 1000f
+    val displayWeight = weight?.weightKg ?: profile.weightKg
+    val calorieTarget = nutrition.calorieTarget.coerceAtLeast(1)
+    val calorieProgress = (nutrition.totalCaloriesConsumed.toFloat() / calorieTarget).coerceIn(0f, 1f)
+    val stepTarget = profile.dailyStepGoal.coerceAtLeast(1)
+    val stepProgress = (currentSteps.toFloat() / stepTarget).coerceIn(0f, 1f)
+    val waterTarget = profile.dailyWaterTargetMl.coerceAtLeast(1)
+    val today = SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date())
+
     LazyColumn(
-        modifier = modifier.fillMaxSize().background(PageBg),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        modifier = modifier.fillMaxSize().background(HomeBackground),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 26.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("NutriGlass AI", fontSize = 29.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onNavigateToProgress) {
-                        Icon(Icons.Default.StarBorder, "Progress", tint = Color.Black, modifier = Modifier.size(29.dp))
-                    }
-                    IconButton(onClick = onNavigateToAiCoach) {
-                        Icon(Icons.Default.MoreVert, "AI coach", tint = Color.Black)
-                    }
-                }
-            }
-        }
-
-        item {
-            Surface(color = CardBg, shape = RoundedCornerShape(30.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircleIcon(Icons.Default.SelfImprovement, Color(0xFF88888D))
-                        Spacer(Modifier.width(12.dp))
-                        Text("Mindfulness", fontSize = 23.sp, fontWeight = FontWeight.Bold, color = Ink)
-                        Spacer(Modifier.width(10.dp))
-                        Surface(color = Color(0xFFAAAAAE), shape = CircleShape) {
-                            Text("Daily", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+                    Surface(shape = RoundedCornerShape(15.dp), color = HomeBlue, modifier = Modifier.size(42.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.LocalFlorist, null, tint = Color.White, modifier = Modifier.size(27.dp))
                         }
                     }
-                    Spacer(Modifier.height(18.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MindfulnessTile("Mood\ncheck-in", "☀", Color(0xFFF2E2DC), Color(0xFFE78A69), onNavigateToAiCoach, Modifier.weight(1f))
-                        MindfulnessTile("Breathing\nexercises", "◉", Color(0xFFEAE7F5), Color(0xFFB4A1E8), onNavigateToAiCoach, Modifier.weight(1f))
-                        MindfulnessTile("Meditation", "❋", Color(0xFFDDF0EB), Color(0xFF66C5A6), onNavigateToAiCoach, Modifier.weight(1f))
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("NutriGlass AI", fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, color = HomeBlue)
+                        Text("Scan • Track • Transform", fontSize = 11.sp, color = HomeInk, fontWeight = FontWeight.Medium)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onNavigateToAiCoach) {
+                        Icon(Icons.Default.NotificationsNone, "Notifications", tint = HomeInk, modifier = Modifier.size(25.dp))
+                    }
+                    IconButton(onClick = onNavigateToProgress) {
+                        Icon(Icons.Default.Settings, "Settings and profile", tint = HomeInk, modifier = Modifier.size(25.dp))
                     }
                 }
             }
         }
 
         item {
-            MetricCard(
-                title = "Heart rate",
-                subtitle = "No heart-rate sensor reading available",
-                icon = Icons.Default.Favorite,
-                accent = Orange,
-                rightContent = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("—", color = Orange, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Text("BPM", color = Muted, fontSize = 10.sp)
+            Surface(
+                color = Color(0xFFDCEAFF),
+                shape = RoundedCornerShape(27.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 17.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White,
+                        modifier = Modifier.size(76.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, null, tint = HomeBlue, modifier = Modifier.size(48.dp))
+                        }
                     }
-                },
-                onClick = onNavigateToProgress
-            )
-        }
-        item {
-            MetricCard(
-                title = "Stress",
-                subtitle = "Explore breathing and relaxation tools",
-                icon = Icons.Default.Bolt,
-                accent = Color(0xFFFFB21B),
-                rightContent = {
-                    Row(Modifier.width(112.dp).height(13.dp).clip(CircleShape)) {
-                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF16B7D8)))
-                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF75D63B)))
-                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFFFC52C)))
-                        Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFFFF9828)))
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Hello, ${profile.name.ifBlank { "there" }}!",
+                            fontSize = 20.sp, fontWeight = FontWeight.Bold, color = HomeInk
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text("Keep going! Your health journey starts with today's small steps. 💪",
+                            fontSize = 12.sp, lineHeight = 16.sp, color = HomeInk)
                     }
-                },
-                onClick = onNavigateToAiCoach
-            )
-        }
-        item {
-            MetricCard(
-                title = "Blood oxygen",
-                subtitle = "SpO₂ readings need a compatible device",
-                icon = Icons.Default.WaterDrop,
-                accent = Blue,
-                rightContent = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("—", color = Blue, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Text("SpO₂", color = Muted, fontSize = 10.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Surface(color = Color.White.copy(alpha = 0.75f), shape = RoundedCornerShape(17.dp)) {
+                        Column(Modifier.padding(horizontal = 10.dp, vertical = 11.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.CalendarMonth, null, tint = HomeBlue, modifier = Modifier.size(21.dp))
+                            Spacer(Modifier.height(4.dp))
+                            Text(today, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = HomeInk)
+                            Text("Today", fontSize = 10.sp, color = HomeMuted)
+                        }
                     }
-                },
-                onClick = onNavigateToProgress
-            )
+                }
+            }
         }
 
         item {
-            Text("Your daily health", color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 2.dp))
+            Surface(color = HomeCard, shape = RoundedCornerShape(27.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("✿", color = HomePurple, fontSize = 27.sp)
+                            Spacer(Modifier.width(9.dp))
+                            Text("Mindfulness & Wellness", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = HomeInk)
+                        }
+                        TextButton(onClick = onNavigateToAiCoach, contentPadding = PaddingValues(0.dp)) {
+                            Text("See all  ›", color = HomeInk, fontSize = 12.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        WellnessTile("Mood check-in", "How are you feeling?", "☀", Color(0xFFFFE5E0), Color(0xFFFF795D), onNavigateToAiCoach, Modifier.weight(1f))
+                        WellnessTile("Breathing", "Relax and reset", "◉", Color(0xFFECE7FF), HomePurple, onNavigateToAiCoach, Modifier.weight(1f))
+                        WellnessTile("Meditation", "Find your calm", "✿", Color(0xFFDDF7EC), HomeGreen, onNavigateToAiCoach, Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmallMetricCard("Heart Rate", "— bpm", "Not available", Icons.Default.Favorite, Color(0xFFFF4778), onNavigateToProgress, Modifier.weight(1f))
+                SmallMetricCard("Stress", "—", "Try breathing", Icons.Default.Psychology, HomeOrange, onNavigateToAiCoach, Modifier.weight(1f))
+            }
         }
         item {
-            MetricCard(
-                title = "Calories & nutrition",
-                subtitle = "${nutrition.totalCaloriesConsumed} / ${nutrition.calorieTarget} kcal • ${meals.size} meals logged",
-                icon = Icons.Default.LocalFireDepartment,
-                accent = Orange,
-                rightContent = { Text("Food diary  ›", color = Orange, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
-                onClick = onNavigateToFood
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmallMetricCard("Blood Oxygen", "— %", "No sensor reading", Icons.Default.WaterDrop, HomeBlue, onNavigateToProgress, Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    HomeMetricCard(
+                        title = "Calories",
+                        value = "${nutrition.totalCaloriesConsumed} kcal",
+                        subtitle = "Target: ${nutrition.calorieTarget} kcal",
+                        icon = Icons.Default.LocalFireDepartment,
+                        accent = HomeOrange,
+                        progress = calorieProgress,
+                        onClick = onNavigateToFood
+                    )
+                }
+            }
         }
         item {
-            MetricCard(
-                title = "Steps & walking",
-                subtitle = "${steps?.steps ?: 0} steps • ${String.format("%.2f", (steps?.distanceMeters ?: 0f) / 1000f)} km",
-                icon = Icons.Default.DirectionsWalk,
-                accent = Green,
-                rightContent = { Text("Start walk  ›", color = Green, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
-                onClick = onNavigateToActivity
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeMetricCard(
+                    title = "Steps",
+                    value = "%,d".format(currentSteps),
+                    subtitle = "Target: %,d".format(profile.dailyStepGoal),
+                    icon = Icons.Default.DirectionsWalk,
+                    accent = HomeBlue,
+                    progress = stepProgress,
+                    onClick = onNavigateToActivity,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeMetricCard(
+                    title = "Walking Distance",
+                    value = String.format(Locale.getDefault(), "%.2f km", distanceKm),
+                    subtitle = "Today's recorded distance",
+                    icon = Icons.Default.LocationOn,
+                    accent = HomeBlue,
+                    progress = null,
+                    onClick = onNavigateToActivity,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         item {
-            MetricCard(
-                title = "Water",
-                subtitle = "${water} ml of ${profile.dailyWaterTargetMl} ml",
-                icon = Icons.Default.Opacity,
-                accent = Blue,
-                rightContent = { Text("+ Add  ›", color = Blue, fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
-                onClick = onNavigateToFood
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeMetricCard(
+                    title = "Hydration",
+                    value = if (water >= 1000) String.format(Locale.getDefault(), "%.1f L", water / 1000f) else "${water} ml",
+                    subtitle = "Target: ${String.format(Locale.getDefault(), "%.1f", waterTarget / 1000f)} L",
+                    icon = Icons.Default.LocalDrink,
+                    accent = HomeBlue,
+                    progress = (water.toFloat() / waterTarget).coerceIn(0f, 1f),
+                    onClick = onNavigateToFood,
+                    modifier = Modifier.weight(1f)
+                )
+                HomeMetricCard(
+                    title = "Weight",
+                    value = "${displayWeight} kg",
+                    subtitle = "Your latest recorded weight",
+                    icon = Icons.Default.MonitorWeight,
+                    accent = HomePurple,
+                    progress = null,
+                    onClick = onNavigateToBodyComposition,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
+
         item {
-            MetricCard(
-                title = "Weight & body journey",
-                subtitle = "${weight?.weightKg ?: profile.weightKg} kg • BMI and body progress",
-                icon = Icons.Default.MonitorWeight,
-                accent = Color(0xFF9275D8),
-                rightContent = { Text("View  ›", color = Color(0xFF9275D8), fontWeight = FontWeight.SemiBold, fontSize = 12.sp) },
-                onClick = onNavigateToBodyComposition
-            )
+            Surface(
+                color = HomeCard,
+                shape = RoundedCornerShape(25.dp),
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onNavigateToScan)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 17.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(color = Color(0xFFEAF3FF), shape = RoundedCornerShape(19.dp), modifier = Modifier.size(76.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Restaurant, null, tint = HomeGreen, modifier = Modifier.size(43.dp))
+                            Icon(Icons.Default.CenterFocusStrong, null, tint = HomeBlue, modifier = Modifier.size(29.dp).align(Alignment.BottomEnd))
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("AI Food Scanner", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = HomeInk)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Scan, analyze and review nutrition information.", fontSize = 11.sp, lineHeight = 15.sp, color = HomeMuted)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = onNavigateToScan,
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = HomeBlue),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Text("Scan Now  ›", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
+
         item {
-            Surface(color = CardBg, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp)) {
-                    Text("Quick actions", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(14.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        QuickButton("Scan food", Icons.Default.CameraAlt, onNavigateToScan, Modifier.weight(1f))
-                        QuickButton("Log meal", Icons.Default.Restaurant, onNavigateToFood, Modifier.weight(1f))
-                        QuickButton("AI coach", Icons.Default.Psychology, onNavigateToAiCoach, Modifier.weight(1f))
+            Surface(color = Color(0xFFE7F1FF), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Insights, null, tint = HomeBlue, modifier = Modifier.size(25.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("Daily summary", color = HomeInk, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("${meals.size} meals logged • ${nutrition.totalCaloriesConsumed} kcal recorded today",
+                            color = HomeMuted, fontSize = 11.sp)
                     }
                 }
             }
@@ -202,69 +283,65 @@ fun HomeScreen(
 }
 
 @Composable
-private fun CircleIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color) {
-    Surface(shape = CircleShape, color = tint, modifier = Modifier.size(42.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(23.dp))
-        }
-    }
-}
-
-@Composable
-private fun MindfulnessTile(
-    title: String, symbol: String, background: Color, symbolColor: Color,
+private fun WellnessTile(
+    title: String, subtitle: String, symbol: String, background: Color, accent: Color,
     onClick: () -> Unit, modifier: Modifier = Modifier
 ) {
     Column(
-        modifier.height(148.dp).clip(RoundedCornerShape(30.dp)).background(background)
-            .clickable(onClick = onClick).padding(14.dp),
+        modifier = modifier.height(142.dp).clip(RoundedCornerShape(24.dp)).background(background)
+            .clickable(onClick = onClick).padding(12.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(symbol, color = symbolColor, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-        Text(title, color = Ink, fontSize = 16.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun MetricCard(
-    title: String, subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    accent: Color, rightContent: @Composable () -> Unit,
-    onClick: () -> Unit
-) {
-    Surface(
-        color = CardBg, shape = RoundedCornerShape(30.dp),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 22.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CircleIcon(icon, Color(0xFF88888D))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text(subtitle, color = Muted, fontSize = 13.sp, lineHeight = 17.sp)
-            }
-            Spacer(Modifier.width(8.dp))
-            rightContent()
+        Text(symbol, color = accent, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+        Column {
+            Text(title, color = HomeInk, fontSize = 13.sp, fontWeight = FontWeight.Bold, lineHeight = 16.sp)
+            Text(subtitle, color = HomeMuted, fontSize = 9.sp, lineHeight = 12.sp)
         }
     }
 }
 
 @Composable
-private fun QuickButton(
-    label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun SmallMetricCard(
+    title: String, value: String, subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector, accent: Color,
     onClick: () -> Unit, modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(PageBg).clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 5.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(icon, null, tint = Color(0xFF1473EA), modifier = Modifier.size(23.dp))
-        Spacer(Modifier.height(5.dp))
-        Text(label, color = Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    Surface(color = HomeCard, shape = RoundedCornerShape(25.dp), modifier = modifier.clickable(onClick = onClick)) {
+        Column(Modifier.fillMaxWidth().padding(15.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = HomeInk)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(value, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, color = HomeInk)
+            Text(subtitle, fontSize = 10.sp, color = HomeMuted, lineHeight = 13.sp)
+        }
+    }
+}
+
+@Composable
+private fun HomeMetricCard(
+    title: String, value: String, subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector, accent: Color,
+    progress: Float?, onClick: () -> Unit, modifier: Modifier = Modifier
+) {
+    Surface(color = HomeCard, shape = RoundedCornerShape(25.dp), modifier = modifier.clickable(onClick = onClick)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, null, tint = accent, modifier = Modifier.size(25.dp))
+                Spacer(Modifier.width(7.dp))
+                Text(title, color = HomeInk, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(value, color = HomeInk, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+            Text(subtitle, color = HomeMuted, fontSize = 10.sp, lineHeight = 13.sp, maxLines = 2)
+            if (progress != null) {
+                Spacer(Modifier.height(10.dp))
+                Box(Modifier.fillMaxWidth().height(7.dp).clip(CircleShape).background(Color(0xFFE9EDF4))) {
+                    Box(Modifier.fillMaxWidth(progress).fillMaxHeight().clip(CircleShape).background(accent))
+                }
+            }
+        }
     }
 }
