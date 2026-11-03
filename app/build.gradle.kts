@@ -126,9 +126,6 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.play.services.location)
-  // Native Google Maps for the Compose-based walking tracker
-  implementation("com.google.maps.android:maps-compose:4.4.1")
-  implementation("com.google.android.gms:play-services-maps:20.1.0")
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
