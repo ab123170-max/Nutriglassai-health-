@@ -94,6 +94,14 @@ class StandardFoodVisionPipeline(
             val detectedObjects = detectionEngine.detectFoodObjects(frame)
             stageTimings["detection"] = System.currentTimeMillis() - detStart
 
+            if (detectedObjects.isEmpty()) {
+                return@withContext VisionProcessingResult.Error(
+                    message = "No verified on-device food detector is installed. Use the AI Food Scanner with an internet connection instead; no food or calories have been guessed.",
+                    errorType = VisionErrorType.MODEL_NOT_FOUND,
+                    failedStage = VisionProcessingStage.DETECTION
+                )
+            }
+
             val foodBoxes = detectedObjects.map { it.box }
 
             // STAGE 3: SEGMENTATION
@@ -113,12 +121,12 @@ class StandardFoodVisionPipeline(
             val visionItems = mutableListOf<FoodVisionItem>()
             val nutrientList = mutableListOf<NutrientBreakdown>()
 
-            val regions = foodMask.regions.ifEmpty {
-                listOf(
-                    FoodRegion(
-                        label = "Main Dish",
-                        boundingBox = BoundingBox(0.15f, 0.15f, 0.85f, 0.85f, 0.85f, "main", "Main Food")
-                    )
+            val regions = foodMask.regions
+            if (regions.isEmpty()) {
+                return@withContext VisionProcessingResult.Error(
+                    message = "No distinct food region could be verified in this image. Please retake the photo or use AI Food Scanner.",
+                    errorType = VisionErrorType.UNSUPPORTED_FOOD_CLASS,
+                    failedStage = VisionProcessingStage.SEGMENTATION
                 )
             }
 
@@ -131,22 +139,29 @@ class StandardFoodVisionPipeline(
                     topK = 5
                 )
                 val topPred = classificationOutput.topPrediction
+                if (topPred == null || !classificationOutput.isConfident) {
+                    return@withContext VisionProcessingResult.Error(
+                        message = "No trained on-device food classifier is installed. Use the Gemini AI Food Scanner; this image has not been assigned a guessed food name or calorie value.",
+                        errorType = VisionErrorType.MODEL_NOT_FOUND,
+                        failedStage = VisionProcessingStage.CLASSIFICATION
+                    )
+                }
 
-                val classId = topPred?.classId ?: "generic_food"
-                val englishName = topPred?.displayName ?: "Mixed Food"
-                val nepaliName = topPred?.nepaliName ?: ""
+                val classId = topPred.classId
+                val englishName = topPred.displayName
+                val nepaliName = topPred.nepaliName
 
                 // STAGE 5: PORTION ESTIMATION
                 val portion = portionEngine.estimatePortion(region, classId)
 
                 // STAGE 6: NUTRITION MAPPING
                 val nutrients = calorieEngine.calculateNutrients(
-                    baseCaloriesPer100g = topPred?.caloriesPer100g ?: 150f,
-                    baseProteinPer100g = topPred?.proteinPer100g ?: 5.0f,
-                    baseCarbsPer100g = topPred?.carbsPer100g ?: 20.0f,
-                    baseFatPer100g = topPred?.fatPer100g ?: 3.0f,
-                    baseFiberPer100g = topPred?.fiberPer100g,
-                    baseSodiumPer100g = topPred?.sodiumPer100g,
+                    baseCaloriesPer100g = topPred.caloriesPer100g,
+                    baseProteinPer100g = topPred.proteinPer100g,
+                    baseCarbsPer100g = topPred.carbsPer100g,
+                    baseFatPer100g = topPred.fatPer100g,
+                    baseFiberPer100g = topPred.fiberPer100g,
+                    baseSodiumPer100g = topPred.sodiumPer100g,
                     portionGrams = portion.estimatedGrams,
                     cookingMethod = CookingMethod.STEAMED
                 )
@@ -182,7 +197,7 @@ class StandardFoodVisionPipeline(
                 ),
                 processingDurationMs = duration,
                 stageBreakdown = stageTimings,
-                modelUsed = "NutriGlass-OnDevice-V1.2"
+                modelUsed = "No on-device model; verified results only"
             )
         } catch (e: CancellationException) {
             VisionProcessingResult.Cancelled
