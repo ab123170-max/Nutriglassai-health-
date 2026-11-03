@@ -101,14 +101,6 @@ class StandardFoodVisionPipeline(
                     failedStage = VisionProcessingStage.DETECTION
                 )
             }
-
-            if (detectedObjects.isEmpty()) {
-                return@withContext VisionProcessingResult.Error(
-                    message = "No verified on-device food detector is installed. Use the AI Food Scanner with an internet connection instead; no food or calories have been guessed.",
-                    errorType = VisionErrorType.MODEL_NOT_FOUND,
-                    failedStage = VisionProcessingStage.DETECTION
-                )
-            }
             val foodBoxes = detectedObjects.map { it.box }
 
             // STAGE 3: SEGMENTATION
