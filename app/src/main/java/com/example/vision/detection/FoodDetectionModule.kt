@@ -1,7 +1,5 @@
 package com.example.vision.detection
 
-import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.RectF
 import com.example.vision.core.FoodFrame
 import kotlinx.coroutines.Dispatchers
@@ -9,9 +7,6 @@ import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * Normalized bounding box coordinates [0..1] with detection metrics.
- */
 data class BoundingBox(
     val left: Float,
     val top: Float,
@@ -26,14 +21,12 @@ data class BoundingBox(
     val height: Float get() = (bottom - top).coerceAtLeast(0f)
     val area: Float get() = width * height
 
-    fun toImageCoordinates(imageWidth: Int, imageHeight: Int): RectF {
-        return RectF(
-            (left * imageWidth).coerceIn(0f, imageWidth.toFloat()),
-            (top * imageHeight).coerceIn(0f, imageHeight.toFloat()),
-            (right * imageWidth).coerceIn(0f, imageWidth.toFloat()),
-            (bottom * imageHeight).coerceIn(0f, imageHeight.toFloat())
-        )
-    }
+    fun toImageCoordinates(imageWidth: Int, imageHeight: Int): RectF = RectF(
+        (left * imageWidth).coerceIn(0f, imageWidth.toFloat()),
+        (top * imageHeight).coerceIn(0f, imageHeight.toFloat()),
+        (right * imageWidth).coerceIn(0f, imageWidth.toFloat()),
+        (bottom * imageHeight).coerceIn(0f, imageHeight.toFloat())
+    )
 }
 
 data class DetectedFoodObject(
@@ -58,160 +51,46 @@ interface FoodDetectionEngine {
 }
 
 /**
- * Production implementation combining plate localization and chromatic saliency clustering
- * to detect distinct food regions on a plate or tabletop. Compatible with downstream
- * TFLite Object Detection tensors (YOLOv8-Food / EfficientDet-Lite).
+ * Safe placeholder used until a real, trained object-detection model is packaged.
+ *
+ * The previous implementation invented a plate at the centre of every photo and
+ * divided it into three arbitrary food regions. That produced false detections.
+ * Returning no detections is intentional: the app's cloud Gemini vision scanner
+ * remains the supported food-identification path.
  */
 class ChromaticSaliencyFoodDetector : FoodDetectionEngine {
-
-    // Known non-food objects that must not be reported as food items
-    private val nonFoodClasses = setOf(
-        "plate", "bowl", "cup", "table", "fork", "spoon", "knife", "napkin", "hand", "tray"
-    )
-
     override suspend fun detectFoodObjects(
         frame: FoodFrame,
         config: DetectionConfig
     ): List<DetectedFoodObject> = withContext(Dispatchers.Default) {
-        val bmp = frame.bitmap
-        val width = bmp.width
-        val height = bmp.height
-
-        val rawDetections = mutableListOf<BoundingBox>()
-
-        // 1. Detect plate / serving boundary (central bright/circular cluster)
-        val plateBox = detectServingContainer(bmp)
-        if (plateBox != null) {
-            rawDetections.add(plateBox)
-        }
-
-        // 2. Identify chromatic regions within or around the plate
-        val foodRegions = findChromaticClusters(bmp, plateBox)
-        rawDetections.addAll(foodRegions)
-
-        // 3. Filter non-food classes if configured
-        val filtered = if (config.rejectNonFoodClasses) {
-            rawDetections.filter { detection ->
-                detection.isFoodItem && !nonFoodClasses.contains(detection.className.lowercase())
-            }
-        } else {
-            rawDetections
-        }
-
-        // 4. Filter by confidence threshold
-        val confident = filtered.filter { it.confidence >= config.minConfidenceThreshold }
-
-        // 5. Apply Non-Maximum Suppression (NMS)
-        val nmsBoxes = applyNonMaxSuppression(confident, config.nmsIouThreshold)
-            .take(config.maxDetections)
-
-        // Calculate relative area fractions against plate
-        val plateArea = plateBox?.area?.coerceAtLeast(0.1f) ?: 1.0f
-        nmsBoxes.map { box ->
-            DetectedFoodObject(
-                box = box,
-                isPlateOrContainer = false,
-                relativePlateAreaFraction = (box.area / plateArea).coerceIn(0f, 1f)
-            )
-        }
+        // Never fabricate bounding boxes or food labels from image position/colour.
+        emptyList()
     }
 
-    /**
-     * Non-Maximum Suppression (NMS) implementation
-     */
     fun applyNonMaxSuppression(
         boxes: List<BoundingBox>,
         iouThreshold: Float
     ): List<BoundingBox> {
         val sorted = boxes.sortedByDescending { it.confidence }.toMutableList()
         val selected = mutableListOf<BoundingBox>()
-
         while (sorted.isNotEmpty()) {
             val current = sorted.removeAt(0)
             selected.add(current)
-
             val iterator = sorted.iterator()
             while (iterator.hasNext()) {
-                val candidate = iterator.next()
-                if (computeIoU(current, candidate) >= iouThreshold) {
-                    iterator.remove()
-                }
+                if (computeIoU(current, iterator.next()) >= iouThreshold) iterator.remove()
             }
         }
         return selected
     }
 
-    /**
-     * Calculates Intersection over Union (IoU) of two bounding boxes.
-     */
     fun computeIoU(a: BoundingBox, b: BoundingBox): Float {
-        val interLeft = max(a.left, b.left)
-        val interTop = max(a.top, b.top)
-        val interRight = min(a.right, b.right)
-        val interBottom = min(a.bottom, b.bottom)
-
-        val interWidth = (interRight - interLeft).coerceAtLeast(0f)
-        val interHeight = (interBottom - interTop).coerceAtLeast(0f)
-        val interArea = interWidth * interHeight
-
-        val unionArea = a.area + b.area - interArea
-        return if (unionArea <= 0f) 0f else interArea / unionArea
-    }
-
-    private fun detectServingContainer(bmp: Bitmap): BoundingBox? {
-        // Serving plates are predominantly centered and occupy 50-85% of standard food photos
-        return BoundingBox(
-            left = 0.12f,
-            top = 0.12f,
-            right = 0.88f,
-            bottom = 0.88f,
-            confidence = 0.82f,
-            classId = "plate_container",
-            className = "Plate",
-            isFoodItem = false
-        )
-    }
-
-    private fun findChromaticClusters(bmp: Bitmap, plateBox: BoundingBox?): List<BoundingBox> {
-        // Divides the dish area into prominent visual food quadrants/zones
-        // e.g. Nepali Thali / plate commonly has 2 to 4 separate items: Rice, Dal, Tarkari, Achar
-        val pLeft = plateBox?.left ?: 0.15f
-        val pTop = plateBox?.top ?: 0.15f
-        val pRight = plateBox?.right ?: 0.85f
-        val pBottom = plateBox?.bottom ?: 0.85f
-
-        val midX = (pLeft + pRight) / 2f
-        val midY = (pTop + pBottom) / 2f
-
-        // Sample quadrants for visual content
-        return listOf(
-            BoundingBox(
-                left = pLeft + 0.05f,
-                top = pTop + 0.05f,
-                right = midX - 0.02f,
-                bottom = midY - 0.02f,
-                confidence = 0.78f,
-                classId = "food_cluster_1",
-                className = "Food Item 1"
-            ),
-            BoundingBox(
-                left = midX + 0.02f,
-                top = pTop + 0.05f,
-                right = pRight - 0.05f,
-                bottom = midY - 0.02f,
-                confidence = 0.75f,
-                classId = "food_cluster_2",
-                className = "Food Item 2"
-            ),
-            BoundingBox(
-                left = pLeft + 0.10f,
-                top = midY + 0.03f,
-                right = pRight - 0.10f,
-                bottom = pBottom - 0.05f,
-                confidence = 0.85f,
-                classId = "food_cluster_main",
-                className = "Main Dish"
-            )
-        )
+        val left = max(a.left, b.left)
+        val top = max(a.top, b.top)
+        val right = min(a.right, b.right)
+        val bottom = min(a.bottom, b.bottom)
+        val intersection = (right - left).coerceAtLeast(0f) * (bottom - top).coerceAtLeast(0f)
+        val union = a.area + b.area - intersection
+        return if (union <= 0f) 0f else intersection / union
     }
 }
