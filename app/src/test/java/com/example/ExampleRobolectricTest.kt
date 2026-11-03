@@ -1,10 +1,13 @@
 package com.example
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,25 +56,17 @@ class ExampleRobolectricTest {
     assertEquals(1600f, imageCoords.bottom, 0.1f)
   }
 
-  // --- Tests for FoodClassificationModule & Taxonomy ---
+  // The APK currently has no trained on-device model. It must abstain rather than guess.
   @Test
-  fun testFoodClassificationTaxonomyAndNepaliDishes() {
+  fun testFoodClassifierAbstainsWithoutTrainedModel() = runBlocking {
     val classifier = com.example.vision.classification.HybridFoodClassifier()
-    val taxonomy = classifier.getSupportedTaxonomy()
-    assertTrue(taxonomy.size >= 20)
-
-    val englishNames = taxonomy.map { it.englishName }
-    assertTrue(englishNames.contains("Dal Bhat Set"))
-    assertTrue(englishNames.contains("Steamed Momo"))
-    assertTrue(englishNames.contains("Sel Roti"))
-    assertTrue(englishNames.contains("Chatpate"))
-    assertTrue(englishNames.contains("Panipuri (with spiced water)"))
-    assertTrue(englishNames.contains("Dhido (Millet / Buckwheat)"))
-
-    val nepaliNames = taxonomy.map { it.nepaliName }
-    assertTrue(nepaliNames.contains("दाल भात"))
-    assertTrue(nepaliNames.contains("ममः (८ पिस)"))
-    assertTrue(nepaliNames.contains("सेल रोटी"))
+    val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
+    val output = classifier.classifyFood(bitmap)
+    assertTrue(classifier.getSupportedTaxonomy().isEmpty())
+    assertTrue(output.predictions.isEmpty())
+    assertNull(output.topPrediction)
+    assertFalse(output.isConfident)
+    bitmap.recycle()
   }
 
   // --- Tests for PortionEstimationModule ---
