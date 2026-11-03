@@ -113,7 +113,6 @@ abstract class AppDatabase : RoomDatabase() {
                             super.onCreate(db)
                             INSTANCE?.let { database ->
                                 CoroutineScope(Dispatchers.IO).launch {
-                                    database.foodDao().insertFoods(PreloadedData.nepaliFoodItems)
                                     database.achievementDao().initAchievements(PreloadedData.allAchievements)
                                     database.healthDao().saveUserProfile(UserProfile())
                                     database.healthDao().saveMeasurementPreferences(
