@@ -404,7 +404,8 @@ object GeminiFoodService {
             for (i in 0 until jsonItems.length()) {
                 val itemObj = jsonItems.getJSONObject(i)
 
-                val foodName = itemObj.optString("food_name", itemObj.optString("foodName", "Food Item")).trim()
+                val foodName = itemObj.optString("food_name", itemObj.optString("foodName", "")).trim()
+                if (foodName.isBlank() || foodName.equals("Food Item", ignoreCase = true)) continue
                 val nepaliName = itemObj.optString("nepali_name", itemObj.optString("nepaliName", "")).trim()
                 val prepMethod = itemObj.optString("preparation_method", itemObj.optString("preparationMethod", "Standard")).trim()
                 val quantity = itemObj.optDouble("serving_size", itemObj.optDouble("quantity", 1.0)).toFloat().coerceAtLeast(0.1f)
@@ -419,8 +420,8 @@ object GeminiFoodService {
                 val sugar = itemObj.optDouble("sugar_grams", itemObj.optDouble("sugar", 0.0)).toFloat().coerceAtLeast(0f)
                 val sodium = itemObj.optDouble("sodium_milligrams", itemObj.optDouble("sodium", 0.0)).toFloat().coerceAtLeast(0f)
 
-                val rawConf = itemObj.optDouble("confidence", 0.85).toFloat()
-                val confidence = rawConf.coerceIn(0.1f, 1.0f)
+                val rawConf = itemObj.optDouble("confidence", 0.0).toFloat()
+                val confidence = rawConf.coerceIn(0.0f, 1.0f)
                 val requiresConfirm = itemObj.optBoolean("requires_portion_confirmation", confidence < 0.80f)
 
                 val ingArray = itemObj.optJSONArray("ingredients") ?: JSONArray()
