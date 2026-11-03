@@ -4,6 +4,14 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.Build
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -106,6 +114,18 @@ fun ActivityScreen(
     val allWorkouts by viewModel.allWorkouts.collectAsState()
     val stepRecord by viewModel.stepRecord.collectAsState()
     val profile by viewModel.userProfile.collectAsState()
+
+    // Read the real cumulative Android step-counter sensor; never animate or fabricate steps.
+    val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    val stepCounterSensor = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) }
+    var activityPermissionGranted by remember {
+        mutableStateOf(Build.VERSION.SDK_INT < 29 || ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACTIVITY_RECOGNITION
+        ) == PackageManager.PERMISSION_GRANTED)
+    }
+    val activityPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> activityPermissionGranted = granted }
 
     var activeTab by remember { mutableIntStateOf(0) } // 0: Live Session, 1: Workout Plans, 2: History
 
