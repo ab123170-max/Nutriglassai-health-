@@ -5,7 +5,6 @@ import android.util.Base64
 import android.util.Log
 import android.util.LruCache
 import com.example.BuildConfig
-import com.example.data.local.PreloadedData
 import com.example.data.model.FoodScanRecord
 import com.example.data.model.MultiFoodScanResult
 import com.example.data.model.RecognizedFoodItem
@@ -121,7 +120,7 @@ object GeminiFoodService {
 
         // Channel B: Direct Google Generative AI Fallback (if user configured a valid direct key in AI Studio Secrets)
         if (hasDirectKey) {
-            val candidateModels = listOf(GeminiConfig.activeModel, GeminiConfig.FALLBACK_MODEL, GeminiConfig.BACKUP_MODEL).distinct()
+            val candidateModels = (listOf(GeminiConfig.activeModel) + GeminiConfig.SUPPORTED_MODELS).distinct()
             for (model in candidateModels) {
                 try {
                     Log.d("FoodScanner", "Attempting direct Google Generative AI with model $model...")
@@ -515,7 +514,7 @@ object GeminiFoodService {
     private fun buildAnalysisPrompt(): String {
         return """
             You are a professional nutrition vision AI specializing in multi-food meal identification, South Asian / Nepali dishes, and global foods.
-            Identify all distinct food items present in this photo (e.g. separate rice, dal, chicken curry, sauteed vegetables, roti, salad).
+            Identify only food items visibly supported by the photograph. Do not infer a customary Nepali meal, do not fill missing plate regions, and never guess dal-bhat, momo, rice, or another dish from the user's location or prior scans. If no food is clearly visible, return an empty items array. Separate visually distinct foods only when their boundaries are visible. Estimate portions conservatively and state uncertainty; do not claim exact ingredients or weights from appearance alone.
             
             Return ONLY a valid JSON object matching this exact schema:
             {
@@ -612,117 +611,6 @@ object GeminiFoodService {
             healthierAlternatives = allAlts,
             imageUri = imageUriString,
             scannedAt = System.currentTimeMillis()
-        )
-    }
-
-    /**
-     * Authentic local multi-food fallback from verified Nepali nutrition database
-     */
-    fun generateLocalMultiEstimate(imageUriString: String?): MultiFoodScanResult {
-        val rice = PreloadedData.nepaliFoodItems.find { it.name.contains("Rice", true) }
-            ?: PreloadedData.nepaliFoodItems[1]
-        val dal = PreloadedData.nepaliFoodItems.find { it.name.contains("Yellow Lentil", true) }
-            ?: PreloadedData.nepaliFoodItems[6]
-        val saag = PreloadedData.nepaliFoodItems.find { it.name.contains("Saag", true) }
-            ?: PreloadedData.nepaliFoodItems[5]
-
-        val item1 = RecognizedFoodItem(
-            id = UUID.randomUUID().toString(),
-            foodName = "Steamed Rice (Bhat)",
-            nepaliName = "उसिनेको भात",
-            preparationMethod = "Steamed boiled white rice",
-            quantity = 1.0f,
-            unit = "bowl",
-            estimatedGrams = 180f,
-            calories = rice.calories,
-            protein = rice.protein,
-            carbs = rice.carbs,
-            fat = rice.fat,
-            fiber = rice.fiber,
-            sugar = rice.sugar,
-            sodium = 5f,
-            confidence = 0.91f,
-            uncertaintyNotes = "Assumed standard moisture content.",
-            ingredients = listOf("Basmati Rice", "Water"),
-            likelyOilsOrSauces = "None",
-            allergens = emptyList(),
-            alternatives = listOf("Brown Rice", "Chiura"),
-            requiresPortionConfirmation = false
-        )
-
-        val item2 = RecognizedFoodItem(
-            id = UUID.randomUUID().toString(),
-            foodName = "Yellow Lentil Dal (Musuro)",
-            nepaliName = "मुसुरोको दाल",
-            preparationMethod = "Boiled yellow lentils with cumin & turmeric tarka",
-            quantity = 1.0f,
-            unit = "katori",
-            estimatedGrams = 150f,
-            calories = (dal.calories * 0.85f).toInt(),
-            protein = dal.protein * 0.85f,
-            carbs = dal.carbs * 0.85f,
-            fat = dal.fat * 0.85f,
-            fiber = dal.fiber * 0.85f,
-            sugar = dal.sugar * 0.85f,
-            sodium = 190f,
-            confidence = 0.89f,
-            uncertaintyNotes = "Sodium estimated from standard home seasoning.",
-            ingredients = listOf("Musuro lentils", "Cumin", "Turmeric", "Garlic"),
-            likelyOilsOrSauces = "Mustard oil tarka",
-            allergens = listOf("Mustard"),
-            alternatives = listOf("Black Dal (Maas)", "Chana Dal"),
-            requiresPortionConfirmation = false
-        )
-
-        val item3 = RecognizedFoodItem(
-            id = UUID.randomUUID().toString(),
-            foodName = "Rayo ko Saag (Mustard Greens)",
-            nepaliName = "रायोको साग",
-            preparationMethod = "Pan sauteed with fenugreek & mild mustard oil",
-            quantity = 1.0f,
-            unit = "serving",
-            estimatedGrams = 120f,
-            calories = saag.calories,
-            protein = saag.protein,
-            carbs = saag.carbs,
-            fat = saag.fat,
-            fiber = saag.fiber,
-            sugar = saag.sugar,
-            sodium = 140f,
-            confidence = 0.87f,
-            uncertaintyNotes = "Oil uptake estimated at 1 tsp.",
-            ingredients = listOf("Fresh mustard greens", "Fenugreek seeds", "Chili"),
-            likelyOilsOrSauces = "Light mustard oil",
-            allergens = listOf("Mustard"),
-            alternatives = listOf("Spinach", "Gundruk"),
-            requiresPortionConfirmation = true
-        )
-
-        val items = listOf(item1, item2, item3)
-        val totalCals = items.sumOf { it.calories }
-        val totalP = items.map { it.protein }.sum()
-        val totalC = items.map { it.carbs }.sum()
-        val totalF = items.map { it.fat }.sum()
-        val totalFib = items.map { it.fiber }.sum()
-        val totalSug = items.map { it.sugar }.sum()
-        val totalSod = items.map { it.sodium }.sum()
-
-        return MultiFoodScanResult(
-            mealTitle = "Nepali Dal Bhat Tarkari Thali",
-            items = items,
-            totalCalories = totalCals,
-            totalProtein = totalP,
-            totalCarbs = totalC,
-            totalFat = totalF,
-            totalFiber = totalFib,
-            totalSugar = totalSug,
-            totalSodium = totalSod,
-            overallConfidence = 0.89f,
-            uncertaintyNotes = "Offline local profile loaded. Values based on verified Nepali nutritional composition tables. Confirm portions before logging.",
-            disclaimer = "Nutritional values are approximations and should not replace clinical medical advice. Please confirm portion sizes before logging.",
-            imageUri = imageUriString,
-            modelUsed = "offline-local-db",
-            isOfflineFallback = true
         )
     }
 
