@@ -7,9 +7,9 @@ import com.example.BuildConfig
  */
 object GeminiConfig {
 
-    const val PRIMARY_MODEL = "gemini-2.5-flash"
-    const val FALLBACK_MODEL = "gemini-2.0-flash"
-    const val BACKUP_MODEL = "gemini-3.8-flash"
+    const val PRIMARY_MODEL = "gemini-3.8-flash"
+    const val FALLBACK_MODEL = "gemini-3.7-flash"
+    const val BACKUP_MODEL = "gemini-3.6-flash"
 
     /**
      * Vercel Backend Proxy endpoint hosting secure server-side GEMINI_API_KEY
@@ -24,13 +24,13 @@ object GeminiConfig {
     @Volatile
     var activeModel: String = PRIMARY_MODEL
 
-    // Keep this list aligned with the model fallback list in api/gemini.js.
+    // Mirrors the Vercel Gemini proxy fallback order.
     val SUPPORTED_MODELS = listOf(
-        "gemini-2.5-flash",
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-3.8-flash"
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite"
     )
 
     fun getGenerateContentUrl(model: String, apiKey: String): String {
