@@ -37,7 +37,15 @@ jobs:
           printf 'SUPABASE_URL=%s\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
           printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
 
+      - name: Restore persistent debug signing key
+        id: debug_keystore_cache
+        uses: actions/cache@v4
+        with:
+          path: debug.keystore
+          key: nutriglassai-debug-keystore-v1
+
       - name: Create debug signing keystore
+        if: steps.debug_keystore_cache.outputs.cache-hit != 'true'
         run: |
           keytool -genkeypair -v \
             -keystore debug.keystore \
