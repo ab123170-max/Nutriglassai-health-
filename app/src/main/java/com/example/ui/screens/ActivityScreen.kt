@@ -145,11 +145,24 @@ fun ActivityScreen(
                             lastKnownLocation = location
                             routeCoordinates.add(GpsCoordinate(location.latitude, location.longitude))
                         } else {
-                            val segment = previous.distanceTo(location)
-                            if (segment >= 4f && segment <= 100f) {
-                                trackedDistanceMeters += segment
+                            val segmentMeters = previous.distanceTo(location)
+                            val elapsedSeconds =
+                                (location.elapsedRealtimeNanos - previous.elapsedRealtimeNanos) / 1_000_000_000.0
+                            val speedMps = if (elapsedSeconds > 0.0) segmentMeters / elapsedSeconds else Double.POSITIVE_INFINITY
+
+                            // Reject GPS drift, stale fixes, large jumps and impossible speeds.
+                            if (segmentMeters >= 3f &&
+                                segmentMeters <= 100f &&
+                                elapsedSeconds > 0.0 &&
+                                speedMps <= 8.0
+                            ) {
+                                trackedDistanceMeters += segmentMeters
                                 lastKnownLocation = location
                                 routeCoordinates.add(GpsCoordinate(location.latitude, location.longitude))
+                            } else if (segmentMeters < 3f || segmentMeters > 100f || speedMps > 8.0) {
+                                // Re-anchor after stationary drift or a rejected jump;
+                                // never add the rejected segment to distance.
+                                lastKnownLocation = location
                             }
                         }
                     }
@@ -162,6 +175,7 @@ fun ActivityScreen(
         if (isTracking && !isPaused && hasLocationPermission) {
             try {
                 val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
+                    .setMinUpdateIntervalMillis(1500L)
                     .setMinUpdateDistanceMeters(3f)
                     .build()
                 fusedLocationClient.requestLocationUpdates(request, gpsCallback, Looper.getMainLooper())
@@ -454,7 +468,7 @@ fun ActivityScreen(
                                 // Finish & Save
                                 IconButton(
                                     onClick = {
-                                        val cals = (elapsedSeconds * 0.08f).toInt()
+                                        val cals = com.example.domain.GpsTrackingEngine.calculateCaloriesBurned(trackedDistanceMeters / 1000f)
                                         viewModel.logWorkout(
                                             type = selectedActivityType,
                                             durationSeconds = elapsedSeconds,
