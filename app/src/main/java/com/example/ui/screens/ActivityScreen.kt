@@ -145,8 +145,8 @@ fun ActivityScreen(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        hasLocationPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        // Precise location is required for useful route distance; approximate-only GPS is too noisy.
+        hasLocationPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
     }
 
     LaunchedEffect(Unit) {
