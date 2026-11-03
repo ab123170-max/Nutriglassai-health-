@@ -838,28 +838,12 @@ class HealthViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun useOfflineProfileForCurrentScan() {
-        val bitmap = lastScanBitmap
-        if (bitmap != null) {
-            viewModelScope.launch {
-                _isScanAnalyzing.value = true
-                val frame = com.example.vision.core.FoodFrame(bitmap, lastScanUri)
-                val visionResult = visionCore.analyzeFoodFrame(frame)
-                if (visionResult is com.example.vision.core.VisionProcessingResult.Success && visionResult.data.items.isNotEmpty()) {
-                    runOnDeviceScan(bitmap, lastScanUri)
-                } else {
-                    val profile = com.example.data.network.GeminiFoodService.generateLocalMultiEstimate(lastScanUri)
-                    _multiScanResult.value = profile
-                    _scanError.value = null
-                    _scanErrorType.value = null
-                }
-                _isScanAnalyzing.value = false
-            }
-        } else {
-            _scanError.value = "No food photo available to analyze. Please capture or pick a photo first."
-            _scanErrorType.value = com.example.data.network.GeminiErrorType.BLURRY_OR_NO_FOOD
-            _multiScanResult.value = null
-            _isScanAnalyzing.value = false
-        }
+        // No trained on-device food model is bundled. Never substitute a preset meal
+        // for the user's photograph; ask for network AI analysis instead.
+        _multiScanResult.value = null
+        _isScanAnalyzing.value = false
+        _scanError.value = "Offline food recognition is not available yet. Connect to the internet and retry AI scanning; no food or calories have been guessed."
+        _scanErrorType.value = com.example.data.network.GeminiErrorType.NETWORK_ERROR
     }
 
     fun clearCurrentScan() {
