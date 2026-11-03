@@ -153,6 +153,39 @@ fun ActivityScreen(
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
     }
 
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 29 && !activityPermissionGranted) {
+            activityPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
+    }
+
+    DisposableEffect(activityPermissionGranted, stepCounterSensor) {
+        if (activityPermissionGranted && stepCounterSensor != null) {
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    if (event.sensor.type != Sensor.TYPE_STEP_COUNTER || event.values.isEmpty()) return
+                    val totalSinceBoot = event.values[0].toLong().coerceAtLeast(0L)
+                    val prefs = context.getSharedPreferences("nutriglass_pedometer", Context.MODE_PRIVATE)
+                    val day = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+                    val dayKey = "baseline_$day"
+                    var baseline = prefs.getLong(dayKey, -1L)
+                    if (baseline < 0L || totalSinceBoot < baseline) {
+                        baseline = totalSinceBoot
+                        prefs.edit().putLong(dayKey, baseline).apply()
+                    }
+                    val todaySteps = (totalSinceBoot - baseline).coerceAtLeast(0L)
+                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                    viewModel.logManualSteps(todaySteps)
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            }
+            sensorManager.registerListener(listener, stepCounterSensor, SensorManager.SENSOR_DELAY_NORMAL)
+            onDispose { sensorManager.unregisterListener(listener) }
+        } else {
+            onDispose { }
+        }
+    }
+
     val gpsCallback = remember {
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
