@@ -2,8 +2,8 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -87,12 +87,7 @@ import com.example.ui.theme.HealthTeal
 import com.example.ui.theme.ProteinBlue
 import com.example.ui.theme.WorkoutOrange
 import com.example.ui.viewmodel.HealthViewModel
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.Priority
-import android.os.Looper
+import com.example.service.LocationTrackingService
 import kotlinx.coroutines.delay
 
 data class WorkoutPlan(
@@ -130,14 +125,15 @@ fun ActivityScreen(
     var activeTab by remember { mutableIntStateOf(0) } // 0: Live Session, 1: Workout Plans, 2: History
 
     // Live Tracking State
-    var isTracking by remember { mutableStateOf(false) }
-    var isPaused by remember { mutableStateOf(false) }
+    val gpsPrefs = remember { context.getSharedPreferences(LocationTrackingService.PREFS, Context.MODE_PRIVATE) }
+    var isTracking by remember { mutableStateOf(gpsPrefs.getBoolean(LocationTrackingService.KEY_ACTIVE, false)) }
+    var isPaused by remember { mutableStateOf(gpsPrefs.getBoolean(LocationTrackingService.KEY_PAUSED, false)) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
-    var trackedDistanceMeters by remember { mutableStateOf(0f) }
+    var trackedDistanceMeters by remember { mutableStateOf(gpsPrefs.getFloat(LocationTrackingService.KEY_DISTANCE, 0f)) }
     var selectedActivityType by remember { mutableStateOf("Outdoor Walk") }
-    var lastKnownLocation by remember { mutableStateOf<Location?>(null) }
+    var currentLat by remember { mutableStateOf<Double?>(null) }
+    var currentLon by remember { mutableStateOf<Double?>(null) }
     val routeCoordinates = remember { mutableStateListOf<GpsCoordinate>() }
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     // Location Permission
     var hasLocationPermission by remember {
@@ -186,69 +182,27 @@ fun ActivityScreen(
         }
     }
 
-    val gpsCallback = remember {
-        object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                if (!isTracking || isPaused) return
-                result.locations.forEach { location ->
-                    // Only accept accurate GPS fixes. Do not fabricate route or distance.
-                    if (location.hasAccuracy() && location.accuracy <= 25f) {
-                        val previous = lastKnownLocation
-                        if (previous == null) {
-                            lastKnownLocation = location
-                            routeCoordinates.add(GpsCoordinate(location.latitude, location.longitude))
-                        } else {
-                            val segmentMeters = previous.distanceTo(location)
-                            val elapsedSeconds =
-                                (location.elapsedRealtimeNanos - previous.elapsedRealtimeNanos) / 1_000_000_000.0
-                            val speedMps = if (elapsedSeconds > 0.0) segmentMeters / elapsedSeconds else Double.POSITIVE_INFINITY
-
-                            // Reject GPS drift, stale fixes, large jumps and impossible speeds.
-                            if (segmentMeters >= 3f &&
-                                segmentMeters <= 100f &&
-                                elapsedSeconds > 0.0 &&
-                                speedMps <= 8.0
-                            ) {
-                                trackedDistanceMeters += segmentMeters
-                                lastKnownLocation = location
-                                routeCoordinates.add(GpsCoordinate(location.latitude, location.longitude))
-                            } else if (segmentMeters < 3f || segmentMeters > 100f || speedMps > 8.0) {
-                                // Re-anchor after stationary drift or a rejected jump;
-                                // never add the rejected segment to distance.
-                                lastKnownLocation = location
-                            }
-                        }
-                    }
-                }
+    // The foreground service owns GPS sampling and persists route/distance across app backgrounding.
+    LaunchedEffect(Unit) {
+        while (true) {
+            isTracking = gpsPrefs.getBoolean(LocationTrackingService.KEY_ACTIVE, false)
+            isPaused = gpsPrefs.getBoolean(LocationTrackingService.KEY_PAUSED, false)
+            trackedDistanceMeters = gpsPrefs.getFloat(LocationTrackingService.KEY_DISTANCE, 0f)
+            val baseSeconds = gpsPrefs.getLong(LocationTrackingService.KEY_ELAPSED_BASE, 0L)
+            val startedAt = gpsPrefs.getLong(LocationTrackingService.KEY_STARTED_AT, 0L)
+            elapsedSeconds = if (isTracking && !isPaused && startedAt > 0L) {
+                baseSeconds + ((System.currentTimeMillis() - startedAt) / 1000L)
+            } else baseSeconds
+            val routeJson = gpsPrefs.getString(LocationTrackingService.KEY_ROUTE, "[]") ?: "[]"
+            val routeArray = try { org.json.JSONArray(routeJson) } catch (_: Exception) { org.json.JSONArray() }
+            routeCoordinates.clear()
+            for (index in 0 until routeArray.length()) {
+                val point = routeArray.optJSONArray(index) ?: continue
+                if (point.length() >= 2) routeCoordinates.add(GpsCoordinate(point.optDouble(0), point.optDouble(1)))
             }
-        }
-    }
-
-    LaunchedEffect(isTracking, isPaused, hasLocationPermission) {
-        if (isTracking && !isPaused && hasLocationPermission) {
-            try {
-                val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
-                    .setMinUpdateIntervalMillis(1500L)
-                    .setMinUpdateDistanceMeters(3f)
-                    .build()
-                fusedLocationClient.requestLocationUpdates(request, gpsCallback, Looper.getMainLooper())
-            } catch (_: SecurityException) {
-                hasLocationPermission = false
-            }
-        } else {
-            fusedLocationClient.removeLocationUpdates(gpsCallback)
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose { fusedLocationClient.removeLocationUpdates(gpsCallback) }
-    }
-
-    // Timer ticker
-    LaunchedEffect(isTracking, isPaused) {
-        while (isTracking && !isPaused) {
-            delay(1000L)
-            elapsedSeconds += 1
-            // Real GPS tracking will be implemented in a Foreground Service
+            currentLat = routeCoordinates.lastOrNull()?.lat
+            currentLon = routeCoordinates.lastOrNull()?.lon
+            kotlinx.coroutines.delay(1000L)
         }
     }
 
@@ -430,8 +384,8 @@ fun ActivityScreen(
                     item {
                         GpsMapView(
                             coordinates = routeCoordinates.toList(),
-                            currentLat = lastKnownLocation?.latitude,
-                            currentLon = lastKnownLocation?.longitude,
+                            currentLat = currentLat,
+                            currentLon = currentLon,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -482,11 +436,14 @@ fun ActivityScreen(
                                                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
                                             )
                                         } else {
+                                            val serviceIntent = Intent(context, LocationTrackingService::class.java)
+                                                .setAction(LocationTrackingService.ACTION_START)
+                                                .putExtra(LocationTrackingService.EXTRA_RESET, true)
+                                            ContextCompat.startForegroundService(context, serviceIntent)
                                             isTracking = true
                                             isPaused = false
                                             elapsedSeconds = 0L
                                             trackedDistanceMeters = 0f
-                                            lastKnownLocation = null
                                             routeCoordinates.clear()
                                         }
                                     },
@@ -503,7 +460,13 @@ fun ActivityScreen(
                             } else {
                                 // Pause / Resume
                                 IconButton(
-                                    onClick = { isPaused = !isPaused },
+                                    onClick = {
+                                        val pauseNow = !isPaused
+                                        isPaused = pauseNow
+                                        context.startService(Intent(context, LocationTrackingService::class.java).setAction(
+                                            if (pauseNow) LocationTrackingService.ACTION_PAUSE else LocationTrackingService.ACTION_RESUME
+                                        ))
+                                    },
                                     modifier = Modifier
                                         .size(60.dp)
                                         .clip(CircleShape)
@@ -529,6 +492,7 @@ fun ActivityScreen(
                                             caloriesBurned = cals,
                                             notes = "Tracked via NutriGlass Live Session"
                                         )
+                                        context.startService(Intent(context, LocationTrackingService::class.java).setAction(LocationTrackingService.ACTION_STOP))
                                         isTracking = false
                                         isPaused = false
                                         activeTab = 2 // Navigate to history
