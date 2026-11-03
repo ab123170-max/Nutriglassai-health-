@@ -36,20 +36,20 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          printf 'GEMINI_API_KEY=%s\\n' "${GEMINI_API_KEY:-BUILD_WITHOUT_API_KEY}" > .env
-          printf 'SUPABASE_URL=%s\\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
-          printf 'SUPABASE_PUBLISHABLE_KEY=%s\\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
+          printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-BUILD_WITHOUT_API_KEY}" > .env
+          printf 'SUPABASE_URL=%s\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
+          printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
 
       - name: Create debug signing keystore
         run: |
-          keytool -genkeypair -v \\
-            -keystore debug.keystore \\
-            -storepass android \\
-            -alias androiddebugkey \\
-            -keypass android \\
-            -keyalg RSA \\
-            -keysize 2048 \\
-            -validity 10000 \\
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Run unit tests
