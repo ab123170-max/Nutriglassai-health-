@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Test and build Android APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -22,38 +22,41 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Ensure secrets configuration file exists
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Create build configuration
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          if [ -z "$GEMINI_API_KEY" ]; then
-            echo "GEMINI_API_KEY=BUILD_WITHOUT_API_KEY" > .env
-            echo "GEMINI_API_KEY secret is not configured; using build-only placeholder."
-          else
-            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > .env
-          fi
-          printf 'SUPABASE_URL=%s\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
-          printf 'SUPABASE_PUBLISHABLE_KEY=%s\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
+          printf 'GEMINI_API_KEY=%s\\n' "${GEMINI_API_KEY:-BUILD_WITHOUT_API_KEY}" > .env
+          printf 'SUPABASE_URL=%s\\n' "${SUPABASE_URL:-https://YOUR_PROJECT_REF.supabase.co}" >> .env
+          printf 'SUPABASE_PUBLISHABLE_KEY=%s\\n' "${SUPABASE_PUBLISHABLE_KEY:-sb_publishable_REPLACE_WITH_YOUR_KEY}" >> .env
 
       - name: Create debug signing keystore
         run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
+          keytool -genkeypair -v \\
+            -keystore debug.keystore \\
+            -storepass android \\
+            -alias androiddebugkey \\
+            -keypass android \\
+            -keyalg RSA \\
+            -keysize 2048 \\
+            -validity 10000 \\
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Run unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon :app:assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -62,15 +65,3 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
-
-      - name: Upload APK backup artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: NutriglassAI-debug-APK-Download
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Run unit tests
-        continue-on-error: true
-        run: gradle --no-daemon :app:testDebugUnitTest
