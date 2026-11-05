@@ -55,6 +55,9 @@ interface FoodDetectionEngine {
         frame: FoodFrame,
         config: DetectionConfig = DetectionConfig()
     ): List<DetectedFoodObject>
+
+    /** Release model resources when the owning scanner is closed. */
+    fun release() {}
 }
 
 /**

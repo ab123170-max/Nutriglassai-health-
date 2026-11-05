@@ -1,0 +1,29 @@
+# Dataset root is supplied relative to this file or replaced with an absolute path.
+path: ../dataset
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: dal_bhat
+  1: steamed_rice
+  2: dal
+  3: tarkari
+  4: chicken_curry
+  5: buff_chicken_momo
+  6: veg_momo
+  7: fried_momo
+  8: chatpate
+  9: panipuri
+  10: thukpa
+  11: chowmein
+  12: sel_roti
+  13: dhido
+  14: gundruk
+  15: achar
+  16: samosa
+  17: pakoda
+  18: roti
+  19: paratha
+  20: biryani
+  21: soup

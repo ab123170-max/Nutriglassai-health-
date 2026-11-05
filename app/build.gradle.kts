@@ -106,6 +106,7 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+  implementation(libs.tensorflow.lite.task.vision)
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
