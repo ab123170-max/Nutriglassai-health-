@@ -1,3 +1,5 @@
 ultralytics>=8.3,<9
 Pillow>=10.0
 PyYAML>=6.0
+datasets>=3.0,<5
+huggingface_hub>=0.26
